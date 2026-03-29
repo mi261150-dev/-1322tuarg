@@ -72,10 +72,8 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    /* 入力パーツの横並び調整 */
     div[data-testid="column"] { display: flex; align-items: flex-end; }
     .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 0px; }
-    
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box {
@@ -94,11 +92,10 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# --- 入力エリア (横並び) ---
+# --- 入力エリア ---
 with st.container():
     c_in, c_add = st.columns([1, 1])
     with c_in:
-        # 数字スクロール方式 (selectbox)
         num_list = list(range(1, 111))
         num = st.selectbox("カード番号を選択", num_list, key=f"sel_{len(st.session_state.history)}")
     with c_add:
@@ -118,19 +115,19 @@ if st.session_state.history:
     st.markdown(f'<div class="history-box">出たカード: {" > ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
     st.markdown("""
         <div class="method-guide">
-            <b>方法①レアから探索</b>: SR以上のレアカードを含む３枚以上の履歴から厳密に特定。<br>
-            <b>方法②ノーマル三枚以上</b>: ノーマル(N)のみでも4枚から特定。<br>
-            <b>方法③ミス考慮</b>: 4,7,9などの配列表のミスを許容しつつ、4枚以上の並びから特定。
+            <b>方法①レアから探索</b>: SR以上のレアカードを含む2枚以上の履歴から厳密に特定。<br>
+            <b>方法②ノーマル三枚以上</b>: ノーマル(N)のみでも3枚以上連続していれば特定。<br>
+            <b>方法③ミス考慮</b>: 4,7,9などの配列表ミスを許容しつつ、3枚以上の並びから特定。
         </div>
     """, unsafe_allow_html=True)
 
 st.divider()
 
 # --- 5. 解析 & 表示 ---
-if st.session_state.history and patterns４:
+if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
-    tab1, tab2, tab3 = st.tabs(["① レアあり", "② 雑魚４枚", "③配列のミス考慮"])
+    tab1, tab2, tab3 = st.tabs(["🥇 レアあり", "🥈 3枚一致", "🥉 ミス考慮"])
 
     def render_content(tab_obj, mode, active_req, color):
         with tab_obj:
@@ -180,8 +177,11 @@ if st.session_state.history and patterns４:
                     for item in get_rare_info(d['R'], res['rp']): st.write(f"・{item}", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="status-err">❌ 整合性エラー<br><span style="font-size:14px;">(配列表にない飛び値を検出)</span></div>', unsafe_allow_html=True)
+                st.markdown('<div class="status-err">❌ 整合性エラー<br><span style="font-size:14px;">(配列表にない並びです)</span></div>', unsafe_allow_html=True)
 
     render_content(tab1, "STRICT", (has_rare and len(h)>=2), "#FF4B4B")
     render_content(tab2, "STRICT", (len(h)>=3), "#1f77b4")
     render_content(tab3, "FLEX", (len(h)>=3), "#ffaa00")
+
+else:
+    st.info("カード番号を選択して追加してください")
