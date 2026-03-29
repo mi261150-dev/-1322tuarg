@@ -36,7 +36,7 @@ def load_data():
         return patterns
     except: return {}
 
-# --- 3. 探索エンジン (物理的な繋がりを厳嗣) ---
+# --- 3. 探索エンジン ---
 def find_matches(history, L, R, mode="STRICT"):
     h_len = len(history)
     results = []
@@ -55,13 +55,12 @@ def find_matches(history, L, R, mode="STRICT"):
                     curr_m, curr_s = p + 1, start_s
                     possible = True
                     for i in range(1, h_len):
-                        # Lの次かRの次のどちらかに必ず存在しなければならない
                         if curr_m < len(main) and match(history[i], main[curr_m]):
                             curr_m += 1
                         elif curr_s < len(sub) and match(history[i], sub[curr_s]):
                             curr_s += 1
                         else:
-                            possible = False # 飛び値を検出
+                            possible = False
                             break
                     if possible:
                         results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
@@ -74,6 +73,7 @@ st.markdown("""
     .next-num { font-size: 36px; font-weight: bold; color: #1f77b4; }
     .rarity-tag { font-size: 16px; color: #666; }
     .status-err { color: #ff4b4b; font-weight: bold; font-size: 20px; }
+    .status-uncertain { color: #ffa500; font-weight: bold; font-size: 20px; }
     .history-text { font-size: 28px; font-weight: bold; background: #f0f2f6; padding: 15px; border-radius: 5px; margin-bottom: 10px; }
     .rare-info { font-size: 22px; line-height: 1.8; font-weight: bold; }
     .rare-title { color: #d32f2f; margin-bottom: 8px; text-decoration: underline; font-size: 24px; }
@@ -114,78 +114,89 @@ if st.session_state.history and patterns:
     has_rare = any(is_rare(n) for n in h)
     route_cols = st.columns(3)
     
-    def display_result(col, title, hits, active, color):
+    def display_result(col, title, hits, active, color, check_multiple=False):
         with col:
             st.subheader(title)
             if not active:
                 st.caption("枚数不足")
                 return
             
-            if hits:
-                res = hits[0]
-                data = patterns[res['name']]
-                nl = data['L'][res['lp']] if res['lp'] < len(data['L']) else "END"
-                nr = data['R'][res['rp']] if res['rp'] < len(data['R']) else "END"
-                
-                st.markdown(f"""
-                    <div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; background-color: #fff; margin-bottom: 15px;">
-                        <p style="margin:0; font-weight:bold; color:{color}; font-size: 20px;">{res['name']}</p>
-                        <hr style="margin: 10px 0;">
-                        <div style="display: flex; justify-content: space-around; text-align: center;">
-                            <div><p style="margin:0; color:#666;">左 次予測</p><span class="next-num">{nl}</span><br><span class="rarity-tag">{get_rarity(nl)}</span></div>
-                            <div><p style="margin:0; color:#666;">右 次予測</p><span class="next-num">{nr}</span><br><span class="rarity-tag">{get_rarity(nr)}</span></div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-                
-                def get_all_rare_dists(lst, p):
-                    targets = ["LLR", "LR", "SRパラレル", "LRパラレル", "ランダムLR"]
-                    found = []
-                    for i in range(p, len(lst)):
-                        r = get_rarity(lst[i])
-                        found_this_step = []
-                        for t in targets:
-                            if t in r: found_this_step.append(t)
-                        if found_this_step:
-                            for t in found_this_step:
-                                found.append(f"{t}: {i-p}枚 ({lst[i]})")
-                                if t in targets: targets.remove(t)
-                        if not targets: break
-                    return found if found else ["なし"]
-
-                dl_list = get_all_rare_dists(data['L'], res['lp'])
-                dr_list = get_all_rare_dists(data['R'], res['rp'])
-                
-                st.markdown('<div class="rare-info">', unsafe_allow_html=True)
-                st.markdown('<p class="rare-title">左・次以降のレア</p>', unsafe_allow_html=True)
-                for x in dl_list: st.write(f"・{x}")
-                st.markdown('<p class="rare-title" style="margin-top:15px;">右・次以降のレア</p>', unsafe_allow_html=True)
-                for x in dr_list: st.write(f"・{x}")
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
+            if not hits:
                 st.markdown('<p class="status-err">❌ 整合性エラー</p>', unsafe_allow_html=True)
+                return
+
+            # 「複数の予測結果」があるかチェック
+            if check_multiple:
+                # 予測される（次の左, 次の右）のペアをすべて抽出
+                predictions = []
+                for hit in hits:
+                    d = patterns[hit['name']]
+                    nl = d['L'][hit['lp']] if hit['lp'] < len(d['L']) else "END"
+                    nr = d['R'][hit['rp']] if hit['rp'] < len(d['R']) else "END"
+                    predictions.append((nl, nr))
+                
+                # ユニークな予測の組み合わせが2つ以上あれば「不確定」
+                if len(set(predictions)) > 1:
+                    st.markdown('<p class="status-uncertain">⚠️ 不確定（複数候補あり）</p>', unsafe_allow_html=True)
+                    return
+
+            # ここまで来れば確定、または方法3
+            res = hits[0]
+            data = patterns[res['name']]
+            nl = data['L'][res['lp']] if res['lp'] < len(data['L']) else "END"
+            nr = data['R'][res['rp']] if res['rp'] < len(data['R']) else "END"
+            
+            st.markdown(f"""
+                <div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; background-color: #fff; margin-bottom: 15px;">
+                    <p style="margin:0; font-weight:bold; color:{color}; font-size: 20px;">{res['name']}</p>
+                    <hr style="margin: 10px 0;">
+                    <div style="display: flex; justify-content: space-around; text-align: center;">
+                        <div><p style="margin:0; color:#666;">左 次予測</p><span class="next-num">{nl}</span><br><span class="rarity-tag">{get_rarity(nl)}</span></div>
+                        <div><p style="margin:0; color:#666;">右 次予測</p><span class="next-num">{nr}</span><br><span class="rarity-tag">{get_rarity(nr)}</span></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            def get_all_rare_dists(lst, p):
+                targets = ["LLR", "LR", "SRパラレル", "LRパラレル", "ランダムLR"]
+                found = []
+                for i in range(p, len(lst)):
+                    r = get_rarity(lst[i])
+                    found_this_step = [t for t in targets if t in r]
+                    if found_this_step:
+                        for t in found_this_step:
+                            found.append(f"{t}: {i-p}枚 ({lst[i]})")
+                            if t in targets: targets.remove(t)
+                    if not targets: break
+                return found if found else ["なし"]
+
+            st.markdown('<div class="rare-info">', unsafe_allow_html=True)
+            st.markdown('<p class="rare-title">左・次以降のレア</p>', unsafe_allow_html=True)
+            for x in get_all_rare_dists(data['L'], res['lp']): st.write(f"・{x}")
+            st.markdown('<p class="rare-title" style="margin-top:15px;">右・次以降のレア</p>', unsafe_allow_html=True)
+            for x in get_all_rare_dists(data['R'], res['rp']): st.write(f"・{x}")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # 候補リストの作成
+    def get_all_hits(mode):
+        results = []
+        for name, data in patterns.items():
+            for hit in find_matches(h, data["L"], data["R"], mode=mode):
+                results.append({**hit, "name": name})
+        return results
 
     # 各ルートの実行
-    hits1 = []
-    if has_rare and len(h) >= 2:
-        for name, data in patterns.items():
-            for hit in find_matches(h, data["L"], data["R"], mode="STRICT"):
-                hits1.append({**hit, "name": name})
-    display_result(route_cols[0], "🥇 レアカードある結果", hits1, active=(has_rare and len(h)>=2), color="#FF4B4B")
+    display_result(route_cols[0], "🥇 レアカードある結果", 
+                   hits=get_all_hits("STRICT") if (has_rare and len(h)>=2) else [], 
+                   active=(has_rare and len(h)>=2), color="#FF4B4B", check_multiple=True)
     
-    hits2 = []
-    if len(h) >= 3:
-        for name, data in patterns.items():
-            for hit in find_matches(h, data["L"], data["R"], mode="STRICT"):
-                hits2.append({**hit, "name": name})
-    display_result(route_cols[1], "🥈 ノーマル三枚以上結果", hits2, active=(len(h)>=3), color="#1f77b4")
+    display_result(route_cols[1], "🥈 ノーマル三枚以上結果", 
+                   hits=get_all_hits("STRICT") if (len(h)>=3) else [], 
+                   active=(len(h)>=3), color="#1f77b4", check_multiple=True)
 
-    hits3 = []
-    if len(h) >= 3:
-        for name, data in patterns.items():
-            for hit in find_matches(h, data["L"], data["R"], mode="FLEX"):
-                hits3.append({**hit, "name": name})
-    display_result(route_cols[2], "🥉 配列表のミス考慮結果", hits3, active=(len(h)>=3), color="#ffaa00")
+    display_result(route_cols[2], "🥉 配列表のミス考慮結果", 
+                   hits=get_all_hits("FLEX") if (len(h)>=3) else [], 
+                   active=(len(h)>=3), color="#ffaa00", check_multiple=False)
 
 else:
     st.info("カード番号を入力して履歴を開始してください。")
