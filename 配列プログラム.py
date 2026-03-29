@@ -77,6 +77,10 @@ st.markdown("""
     .history-text { font-size: 28px; font-weight: bold; background: #f0f2f6; padding: 15px; border-radius: 5px; margin-bottom: 10px; }
     .rare-info { font-size: 22px; line-height: 1.8; font-weight: bold; }
     .rare-title { color: #d32f2f; margin-bottom: 8px; text-decoration: underline; font-size: 24px; }
+    /* ボタンの高さを入力欄に合わせる */
+    div[data-testid="stButton"] button {
+        margin-top: 28px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -84,24 +88,22 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 入力エリア（決定ボタンを横に配置）
+# 入力エリア
 with st.container():
     c1, c2, c3, c4 = st.columns([1.5, 0.8, 1, 1.2])
     with c1:
         num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1, key=f"input_{len(st.session_state.history)}")
     with c2:
-        st.write("##")
+        # st.write("##") を消して一段上げる
         if st.button("決定", use_container_width=True):
             st.session_state.history.append(num)
             st.rerun()
     with c3:
-        st.write("##")
         if st.button("履歴いっこ消す", use_container_width=True):
             if st.session_state.history:
                 st.session_state.history.pop()
                 st.rerun()
     with c4:
-        st.write("##")
         if st.button("履歴を全部消す", use_container_width=True):
             st.session_state.history = []
             st.rerun()
@@ -181,11 +183,12 @@ if st.session_state.history and patterns:
                 results.append({**hit, "name": name})
         return results
 
-    display_result(route_cols[0], "🥇 レアカードある結果", 
+    # 文言を修正して実行
+    display_result(route_cols[0], "🥇 レアカードが出た場合の探索結果", 
                    hits=get_all_hits("STRICT") if (has_rare and len(h)>=2) else [], 
                    active=(has_rare and len(h)>=2), color="#FF4B4B", check_multiple=True)
     
-    display_result(route_cols[1], "🥈 ノーマル三枚以上結果", 
+    display_result(route_cols[1], "🥈 ノーマル三枚以上の結果", 
                    hits=get_all_hits("STRICT") if (len(h)>=3) else [], 
                    active=(len(h)>=3), color="#1f77b4", check_multiple=True)
 
