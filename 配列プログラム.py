@@ -84,13 +84,14 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
+# 入力エリア（決定ボタンを横に配置）
 with st.container():
-    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+    c1, c2, c3, c4 = st.columns([1.5, 0.8, 1, 1.2])
     with c1:
         num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1, key=f"input_{len(st.session_state.history)}")
     with c2:
         st.write("##")
-        if st.button("カード番号を入力", use_container_width=True):
+        if st.button("決定", use_container_width=True):
             st.session_state.history.append(num)
             st.rerun()
     with c3:
@@ -101,11 +102,11 @@ with st.container():
                 st.rerun()
     with c4:
         st.write("##")
-        if st.button("履歴を消す", use_container_width=True):
+        if st.button("履歴を全部消す", use_container_width=True):
             st.session_state.history = []
             st.rerun()
 
-st.markdown(f'<div class="history-text">履歴: {" → ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="history-text">出たやつ: {" → ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
 st.divider()
 
 # --- 5. 解析 & 表示 ---
@@ -125,9 +126,7 @@ if st.session_state.history and patterns:
                 st.markdown('<p class="status-err">❌ 整合性エラー</p>', unsafe_allow_html=True)
                 return
 
-            # 「複数の予測結果」があるかチェック
             if check_multiple:
-                # 予測される（次の左, 次の右）のペアをすべて抽出
                 predictions = []
                 for hit in hits:
                     d = patterns[hit['name']]
@@ -135,12 +134,10 @@ if st.session_state.history and patterns:
                     nr = d['R'][hit['rp']] if hit['rp'] < len(d['R']) else "END"
                     predictions.append((nl, nr))
                 
-                # ユニークな予測の組み合わせが2つ以上あれば「不確定」
                 if len(set(predictions)) > 1:
                     st.markdown('<p class="status-uncertain">⚠️ 不確定（複数候補あり）</p>', unsafe_allow_html=True)
                     return
 
-            # ここまで来れば確定、または方法3
             res = hits[0]
             data = patterns[res['name']]
             nl = data['L'][res['lp']] if res['lp'] < len(data['L']) else "END"
@@ -177,7 +174,6 @@ if st.session_state.history and patterns:
             for x in get_all_rare_dists(data['R'], res['rp']): st.write(f"・{x}")
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # 候補リストの作成
     def get_all_hits(mode):
         results = []
         for name, data in patterns.items():
@@ -185,7 +181,6 @@ if st.session_state.history and patterns:
                 results.append({**hit, "name": name})
         return results
 
-    # 各ルートの実行
     display_result(route_cols[0], "🥇 レアカードある結果", 
                    hits=get_all_hits("STRICT") if (has_rare and len(h)>=2) else [], 
                    active=(has_rare and len(h)>=2), color="#FF4B4B", check_multiple=True)
@@ -199,4 +194,4 @@ if st.session_state.history and patterns:
                    active=(len(h)>=3), color="#ffaa00", check_multiple=False)
 
 else:
-    st.info("カード番号を入力して履歴を開始してください。")
+    st.info("カード番号を入力して「決定」を押してください。")
