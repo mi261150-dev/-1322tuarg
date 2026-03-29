@@ -73,7 +73,7 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 st.markdown("""
     <style>
     div[data-testid="column"] { display: flex; align-items: flex-end; }
-    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 0px; }
+    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 5px; }
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box {
@@ -99,7 +99,7 @@ with st.container():
         num_list = list(range(1, 111))
         num = st.selectbox("カード番号を選択", num_list, key=f"sel_{len(st.session_state.history)}")
     with c_add:
-        if st.button("➕ カード番号を入力"):
+        if st.button("✅ 上の番号で確定"):
             st.session_state.history.append(num); st.rerun()
 
     c_sub_btns = st.columns(2)
@@ -116,8 +116,8 @@ if st.session_state.history:
     st.markdown("""
         <div class="method-guide">
             <b>方法①レアから探索</b>: SR以上のレアカードを含む2枚以上の履歴から厳密に特定。<br>
-            <b>方法②ノーマル三枚以上</b>: ノーマル(N)のみでも3枚以上連続していれば特定。<br>
-            <b>方法③ミス考慮</b>: 4,7,9などの配列表ミスを許容しつつ、3枚以上の並びから特定。
+            <b>方法②ノーマル4枚以上</b>: ノーマル(N)のみでも4枚以上から特定。<br>
+            <b>方法③ミス考慮</b>: 4,7,9などの配列表のミスを許容しつつ、3枚以上の並びから特定。
         </div>
     """, unsafe_allow_html=True)
 
@@ -127,7 +127,7 @@ st.divider()
 if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
-    tab1, tab2, tab3 = st.tabs(["🥇 レアあり", "🥈 3枚一致", "🥉 ミス考慮"])
+    tab1, tab2, tab3 = st.tabs(["① レアあり探索", "② 雑魚で探索", "③ 配列表ミス考慮探索"])
 
     def render_content(tab_obj, mode, active_req, color):
         with tab_obj:
@@ -184,4 +184,4 @@ if st.session_state.history and patterns:
     render_content(tab3, "FLEX", (len(h)>=3), "#ffaa00")
 
 else:
-    st.info("カード番号を選択して追加してください")
+    st.info("カード番号を選択して確定ボタンを押してください")
