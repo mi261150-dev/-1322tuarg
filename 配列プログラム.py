@@ -127,7 +127,7 @@ if st.session_state.history:
 st.divider()
 
 # --- 5. 解析 & 表示 ---
-if st.session_state.history and patterns４
+if st.session_state.history and patterns４:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
     tab1, tab2, tab3 = st.tabs(["① レアあり", "② 雑魚４枚", "③配列のミス考慮"])
