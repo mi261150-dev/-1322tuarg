@@ -77,4 +77,55 @@ else:
 
 # 入力フォーム
 with st.form("in_form", clear_on_submit=True):
-    num = st.number_input("カード番号を入力", min_value
+    num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1)
+    if st.form_submit_button("追加"):
+        st.session_state.history.append(num)
+
+if st.button("履歴をリセット"):
+    st.session_state.history = []
+    st.rerun()
+
+st.write(f"**履歴:** {st.session_state.history}")
+
+# 解析実行
+if st.session_state.history and patterns:
+    memo = {}
+    results = []
+    h_tuple = tuple(st.session_state.history)
+    
+    with st.spinner('解析中...'):
+        for name, data in patterns.items():
+            L_f, R_f = data["L"], data["R"]
+            # 物理制約：左右の進み具合の差を10枚以内に限定
+            for ls in range(len(L_f)):
+                for rs in range(max(0, ls-10), min(len(R_f), ls+11)):
+                    # 履歴の1枚目が左右どちらかにあれば解析開始
+                    if (L_f[ls:] and L_f[ls] == h_tuple[0]) or (R_f[rs:] and R_f[rs] == h_tuple[0]):
+                        err, lu, ru = solve(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
+                        if err == 0:
+                            results.append({
+                                "name": name, "lp": ls+lu, "rp": rs+ru,
+                                "nl": L_f[ls+lu] if ls+lu < len(L_f) else None,
+                                "nr": R_f[rs+ru] if rs+ru < len(R_f) else None
+                            })
+
+    if results:
+        # 重複カット
+        unique_results = []
+        seen = set()
+        for r in results:
+            pos = (r['name'], r['lp'], r['rp'])
+            if pos not in seen:
+                unique_results.append(r)
+                seen.add(pos)
+
+        st.subheader("🔍 解析結果")
+        for m in unique_results[:3]:
+            with st.expander(f"【{m['name']}】", expanded=True):
+                st.write(f"位置: 左筒 {m['lp']}枚目 / 右筒 {m['rp']}枚目")
+                c1, c2 = st.columns(2)
+                c1.success(f"**左 次予測**\n\n{m['nl']} ({get_rarity(m['nl'])})")
+                c2.info(f"**右 次予測**\n\n{m['nr']} ({get_rarity(m['nr'])})")
+    else:
+        st.error("一致なし。10枚の範囲内に該当する並びがありません。")
+        
