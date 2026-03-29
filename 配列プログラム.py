@@ -3,6 +3,34 @@
 import streamlit as st
 import pandas as pd
 
+@st.cache_data
+def load_data():
+    # header=None を指定して、1行目からデータとして読み込みます
+    df = pd.read_csv("配列.csv", header=None) 
+    patterns = {}
+    
+    for i in range(6):
+        name = f"配列{i+1}"
+        # 0, 4, 8... 列目に「配列X」という文字がある構造
+        # データは 1, 5, 9... (左) と 2, 6, 10... (右) にある
+        start_col = i * 4
+        
+        try:
+            # 1行目(タイトル)を除外し、数字以外が含まれていても無視して数値化
+            l_raw = df.iloc[1:, start_col + 1]
+            r_raw = df.iloc[1:, start_col + 2]
+            
+            # 数値に変換できるものだけ取り出し、整数にする
+            l = pd.to_numeric(l_raw, errors='coerce').dropna().astype(int).tolist()
+            r = pd.to_numeric(r_raw, errors='coerce').dropna().astype(int).tolist()
+            
+            if l or r:
+                patterns[name] = {"L": l, "R": r}
+        except Exception as e:
+            # 列が足りないなどのエラーがあればその配列はスキップ
+            continue
+            
+    return patterns
 # レアリティ判定
 def get_rarity(n):
     if not n: return ""
