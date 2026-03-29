@@ -17,8 +17,9 @@ def get_rarity(n):
         return "N"
     except: return ""
 
-def is_not_normal(n):
-    return get_rarity(n) not in ["N", ""]
+def is_rare_tag(n):
+    r = get_rarity(n)
+    return "LR" in r or "LLR" in r
 
 # --- 2. データ読み込み ---
 @st.cache_data
@@ -36,24 +37,28 @@ def load_data():
         return patterns
     except: return {}
 
-# --- 3. 判定ロジック (振り分け枚数を特定) ---
-def solve_with_counts(h, L, R):
-    """履歴がLから何枚、Rから何枚出たかを正確に算出"""
+# --- 3. 判定ロジック (高精度スコアリング) ---
+def solve_with_details(h, L, R):
     memo = {}
     def solve_internal(hh, ll, rr):
         state = (len(hh), len(ll), len(rr))
         if state in memo: return memo[state]
-        if not hh: return 0, 0, 0 # error, l_used, r_used
+        if not hh: return 0, 0, 0
         
+        # 左から出たと仮定
         res_l = (999, 0, 0)
         if ll:
-            score = 0 if hh[0] == ll[0] else (0.2 if hh[0] in {4,7,9} and ll[0] in {4,7,9} else 0.8)
+            # 4,7,9誤記は0.1点、通常誤記は0.8点。レアカードの一致はマイナスボーナスで優先度上げ
+            score = 0 if hh[0] == ll[0] else (0.1 if hh[0] in {4,7,9} and ll[0] in {4,7,9} else 0.8)
+            if hh[0] == ll[0] and is_rare_tag(hh[0]): score = -0.2 # レア一致を強力に保護
             e, lu, ru = solve_internal(hh[1:], ll[1:], rr)
             res_l = (score + e, lu + 1, ru)
         
+        # 右から出たと仮定
         res_r = (999, 0, 0)
         if rr:
-            score = 0 if hh[0] == rr[0] else (0.2 if hh[0] in {4,7,9} and rr[0] in {4,7,9} else 0.8)
+            score = 0 if hh[0] == rr[0] else (0.1 if hh[0] in {4,7,9} and rr[0] in {4,7,9} else 0.8)
+            if hh[0] == rr[0] and is_rare_tag(hh[0]): score = -0.2
             e, lu, ru = solve_internal(hh[1:], ll, rr[1:])
             res_r = (score + e, lu, ru + 1)
         
@@ -62,9 +67,9 @@ def solve_with_counts(h, L, R):
         return ans
     return solve_internal(h, L, R)
 
-# --- 4. UI部 ---
-st.set_page_config(page_title="次予測修正版", layout="centered")
-st.title("📱 配列判別 (次予測修正版)")
+# --- 4. UI ---
+st.set_page_config(page_title="究極精度・ダブル予測", layout="centered")
+st.title("📱 配列判別 (第1・第2候補表示)")
 
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
@@ -74,68 +79,78 @@ with st.form("in_form", clear_on_submit=True):
     if st.form_submit_button("追加"):
         st.session_state.history.append(num)
 
-if st.button("リセット"):
-    st.session_state.history = []; st.rerun()
+col_btns = st.columns(2)
+with col_btns[0]:
+    if st.button("最後を削除"):
+        if st.session_state.history: st.session_state.history.pop()
+        st.rerun()
+with col_btns[1]:
+    if st.button("全消去"):
+        st.session_state.history = []
+        st.rerun()
 
-st.write(f"**現在の履歴:** {st.session_state.history}")
+st.write(f"**履歴:** {st.session_state.history}")
 
 if st.session_state.history and patterns:
     all_hits = []
     h_tuple = tuple(st.session_state.history)
+    h_len = len(h_tuple)
     
-    # N以外があるかチェック
-    rare_found = any(is_not_normal(n) for n in h_tuple)
-    
-    with st.spinner('解析中...'):
+    with st.spinner('超精密スキャン中...'):
         for name, data in patterns.items():
             L_f, R_f = data["L"], data["R"]
-            
-            # 全スキャン開始
+            # 物理制約：前後15枚の範囲で総当たり
             for ls in range(len(L_f)):
-                # 左右±15枚の制約
+                # 高速化のため、最初の1枚が付近にある場合のみ
                 for rs in range(max(0, ls-15), min(len(R_f), ls+16)):
-                    # 戦略：1枚目がLかRの開始位置に合致するか、レアカードが含まれる場合のみ詳細計算
-                    if rare_found or L_f[ls] == h_tuple[0] or R_f[rs] == h_tuple[0]:
-                        err, lu, ru = solve_with_counts(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
-                        
-                        if err < len(h_tuple) * 0.4:
-                            all_hits.append({
-                                "name": name, "err": err, 
-                                "next_l_pos": ls + lu, "next_r_pos": rs + ru,
-                                "data": data
-                            })
+                    err, lu, ru = solve_with_details(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
+                    if err < h_len * 0.5:
+                        all_hits.append({
+                            "name": name, "err": err, "lp": ls+lu, "rp": rs+ru, "data": data
+                        })
 
     if all_hits:
-        # 最もエラーが少ないものを採用
-        best = sorted(all_hits, key=lambda x: x['err'])[0]
+        # スコア順にソートして上位2つを取得
+        sorted_hits = sorted(all_hits, key=lambda x: (x['err'], abs(x['lp']-x['rp'])))
         
-        st.subheader(f"🔍 判定結果: {best['name']}")
-        
-        # 次のカード（進んだ後の位置を参照）
-        nl = best['data']['L'][best['next_l_pos']] if best['next_l_pos'] < len(best['data']['L']) else "終了"
-        nr = best['data']['R'][best['next_r_pos']] if best['next_r_pos'] < len(best['data']['R']) else "終了"
-        
-        c1, c2 = st.columns(2)
-        c1.success(f"**左 次予測**\n\n{nl} ({get_rarity(nl)})")
-        c2.info(f"**右 次予測**\n\n{nr} ({get_rarity(nr)})")
-        
-        # LRカウントダウン
-        st.divider()
-        def find_rare(lst, start):
-            for i in range(start, len(lst)):
-                if get_rarity(lst[i]) in ["LR", "LLR", "LRパラレル"]:
-                    return i - start, lst[i]
-            return None, None
+        # 重複（同じ予測結果）を排除して上位2つを抽出
+        display_results = []
+        seen_positions = set()
+        for h in sorted_hits:
+            pos_key = (h['lp'], h['rp'], h['name'])
+            if pos_key not in seen_positions:
+                display_results.append(h)
+                seen_positions.add(pos_key)
+            if len(display_results) >= 2: break
 
-        dl, vl = find_rare(best['data']['L'], best['next_l_pos'])
-        dr, vr = find_rare(best['data']['R'], best['next_r_pos'])
-        
-        cl, cr = st.columns(2)
-        with cl:
-            if dl is not None: st.metric("左LRまで", f"{dl}枚"); st.caption(f"{vl}")
-            else: st.write("左にLRなし")
-        with cr:
-            if dr is not None: st.metric("右LRまで", f"{dr}枚"); st.caption(f"{vr}")
-            else: st.write("右にLRなし")
+        for idx, res in enumerate(display_results):
+            title = "🥇 第1有力候補" if idx == 0 else "🥈 第2有力候補"
+            trust = max(0, int(100 - (res['err'] / h_len * 200)))
+            
+            with st.expander(f"{title} ({res['name']}) 信頼度: {trust}%", expanded=(idx==0)):
+                nl = res['data']['L'][res['lp']] if res['lp'] < len(res['data']['L']) else "終了"
+                nr = res['data']['R'][res['rp']] if res['rp'] < len(res['data']['R']) else "終了"
+                
+                c1, c2 = st.columns(2)
+                c1.success(f"**左 次予測**\n\n{nl} ({get_rarity(nl)})")
+                c2.info(f"**右 次予測**\n\n{nr} ({get_rarity(nr)})")
+                
+                # レアまでの距離
+                st.write("---")
+                def find_rare(lst, start):
+                    for i in range(start, len(lst)):
+                        if is_rare_tag(lst[i]): return i - start, lst[i]
+                    return None, None
+                
+                dl, vl = find_rare(res['data']['L'], res['lp'])
+                dr, vr = find_rare(res['data']['R'], res['rp'])
+                
+                cl, cr = st.columns(2)
+                with cl:
+                    if dl is not None: st.metric("左LRまで", f"{dl}枚"); st.caption(f"次は {vl}")
+                    else: st.write("左にLRなし")
+                with cr:
+                    if dr is not None: st.metric("右LRまで", f"{dr}枚"); st.caption(f"次は {vr}")
+                    else: st.write("右にLRなし")
     else:
-        st.error("一致なし。")
+        st.error("一致なし。10枚以上のズレがあるか、別の配列の可能性があります。")
