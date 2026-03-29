@@ -1,23 +1,21 @@
 import streamlit as st
 import pandas as pd
 
-# 1. レアリティ判定
 def get_rarity(n):
     if not n: return ""
     try:
         n = int(n)
-        if n == 101: return "LRパラレル"
-        if n == 100: return "SRパラレル"
-        if n == 99:  return "ランダムLR"
-        if n == 98:  return "ランダムSR"
-        if n in [7, 26, 61]: return "LLR"
-        if n in [1, 16, 18, 27, 36, 48, 55, 58]: return "LR"
-        if n in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63]: return "SR"
+        rarities = {
+            101:"LRパラレル", 100:"SRパラレル", 99:"ランダムLR", 98:"ランダムSR",
+            7:"LLR", 26:"LLR", 61:"LLR",
+            1:"LR", 16:"LR", 18:"LR", 27:"LR", 36:"LR", 48:"LR", 55:"LR", 58:"LR",
+            5:"SR", 20:"SR", 24:"SR", 25:"SR", 31:"SR", 33:"SR", 38:"SR", 40:"SR", 42:"SR", 46:"SR", 52:"SR", 63:"SR"
+        }
+        if n in rarities: return rarities[n]
         if 64 <= n <= 77: return "CP"
         return "N"
-    except: return "不明"
+    except: return ""
 
-# 2. 読み込み
 @st.cache_data
 def load_data():
     try:
@@ -25,41 +23,30 @@ def load_data():
         patterns = {}
         for i in range(6):
             name = f"配列{i+1}"
-            col_l_idx = i * 4 + 1
-            col_r_idx = i * 4 + 2
-            if col_r_idx >= len(df.columns): break
-            
-            l = pd.to_numeric(df.iloc[1:, col_l_idx], errors='coerce').dropna().astype(int).tolist()
-            r = pd.to_numeric(df.iloc[1:, col_r_idx], errors='coerce').dropna().astype(int).tolist()
-            
-            if l or r:
-                patterns[name] = {"L": l, "R": r}
+            col_l = i * 4 + 1
+            col_r = i * 4 + 2
+            if col_r >= len(df.columns): break
+            l = pd.to_numeric(df.iloc[1:, col_l], errors='coerce').dropna().astype(int).tolist()
+            r = pd.to_numeric(df.iloc[1:, col_r], errors='coerce').dropna().astype(int).tolist()
+            if l or r: patterns[name] = {"L": l, "R": r}
         return patterns
-    except Exception as e:
-        st.error(f"読み込みエラー: {e}")
-        return {}
+    except: return {}
 
-# 3. 判定ロジック（配列表側の4,7,9誤記を考慮）
+# メモ化による高速化
 memo = {}
 def solve(h, L, R):
     state = (len(h), len(L), len(R))
     if state in memo: return memo[state]
     if not h: return 0, 0, 0
     
-    # 比較用スコア計算
-    def get_score(input_val, table_val):
-        if input_val == table_val: return 0
-        # 配列表側(table_val)が4,7,9の場合、打ち間違いの可能性として0.5点（軽いペナルティ）
-        typos = {4, 7, 9}
-        if table_val in typos and input_val in typos:
-            return 0.5
-        return 1.0
+    # 配列表に間違いがない前提：不一致は即座に大きなペナルティ
+    def get_score(inp, tbl):
+        return 0 if inp == tbl else 99  # 完全一致以外は実質除外
 
     res_l = (999, 0, 0)
     if L:
         e, lu, ru = solve(h[1:], L[1:], R)
         res_l = (get_score(h[0], L[0]) + e, lu + 1, ru)
-        
     res_r = (999, 0, 0)
     if R:
         e, lu, ru = solve(h[1:], L, R[1:])
@@ -69,60 +56,56 @@ def solve(h, L, R):
     memo[state] = ans
     return ans
 
-# --- UI ---
-st.set_page_config(page_title="高精度配列ツール", layout="centered")
-st.title("📱 配列判別ツール (データ誤記対応版)")
+st.set_page_config(page_title="厳密配列判別", layout="centered")
+st.title("📱 配列判別 (前後10枚制約版)")
 
-if 'history' not in st.session_state: 
-    st.session_state.history = []
-
+if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-with st.form("input_form", clear_on_submit=True):
-    num = st.number_input("引いたカードの番号を入力", min_value=1, max_value=110, step=1)
-    if st.form_submit_button("追加"):
-        st.session_state.history.append(num)
+with st.form("in", clear_on_submit=True):
+    num = st.number_input("カード番号", min_value=1, max_value=110, step=1)
+    if st.form_submit_button("追加"): st.session_state.history.append(num)
 
-if st.button("履歴リセット"):
+if st.button("リセット"):
     st.session_state.history = []
     st.rerun()
 
-st.write(f"**確定履歴:** {st.session_state.history}")
+st.write(f"**現在の履歴:** {st.session_state.history}")
 
 if st.session_state.history and patterns:
     memo = {}
     results = []
-    with st.spinner('全配列を詳細スキャン中...'):
+    h_tuple = tuple(st.session_state.history)
+    
+    with st.spinner('解析中...'):
         for name, data in patterns.items():
             L_f, R_f = data["L"], data["R"]
-            # 探索密度を上げるため、全範囲をスキャン
-            for ls in range(len(L_f)):
-                for rs in range(len(R_f)):
-                    # 1枚目が完全に一致、または4,7,9の許容範囲内なら計算開始
-                    h0 = st.session_state.history[0]
-                    l_match = L_f[ls] == h0 or (h0 in {4,7,9} and L_f[ls] in {4,7,9}) if L_f[ls:] else False
-                    r_match = R_f[rs] == h0 or (h0 in {4,7,9} and R_f[rs] in {4,7,9}) if R_f[rs:] else False
-                    
-                    if l_match or r_match:
-                        err, lu, ru = solve(tuple(st.session_state.history), tuple(L_f[ls:]), tuple(R_f[rs:]))
-                        # 許容誤差を少し厳しめに（データ誤記を考慮しつつ絞り込む）
-                        if err <= len(st.session_state.history) * 0.35:
+            len_l, len_r = len(L_f), len(R_f)
+            
+            # 左右の開始位置をスキャン
+            for ls in range(len_l):
+                # 右筒の開始位置を「左筒の開始位置 ± 10枚」に限定
+                rs_start = max(0, ls - 10)
+                rs_end = min(len_r, ls + 11)
+                
+                for rs in range(rs_start, rs_end):
+                    # 最初の1枚が左右どちらかに存在するかチェック（高速化）
+                    if (L_f[ls:] and L_f[ls] == h_tuple[0]) or (R_f[rs:] and R_f[rs] == h_tuple[0]):
+                        err, lu, ru = solve(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
+                        # エラーが0（完全一致）のものだけを優先的に拾う
+                        if err < 1:
                             results.append({
-                                "name": name, "err": err, "lp": ls+lu, "rp": rs+ru, 
-                                "nl": L_f[ls+lu] if ls+lu < len(L_f) else None,
-                                "nr": R_f[rs+ru] if rs+ru < len(R_f) else None
+                                "name": name, "err": err, "lp": ls+lu, "rp": rs+ru,
+                                "nl": L_f[ls+lu] if ls+lu < len_l else None,
+                                "nr": R_f[rs+ru] if rs+ru < len_r else None
                             })
 
-    # 重複を排除してスコア順に表示
-    unique_res = sorted(results, key=lambda x: x['err'])[:3]
-    
-    if unique_res:
-        st.subheader("🔍 推定される現在地")
-        for m in unique_res:
-            with st.expander(f"{m['name']} (信頼度スコア: {max(0, 100-int(m['err']*20))}%)", expanded=True):
-                c1, c2 = st.columns(2)
-                c1.metric("左筒(L)", f"{m['lp']}枚目")
-                c2.metric("右筒(R)", f"{m['rp']}枚目")
-                st.info(f"**次に出る可能性が高いカード**\n\n左: {m['nl']} ({get_rarity(m['nl'])})\n\n右: {m['nr']} ({get_rarity(m['nr'])})")
+    if results:
+        st.subheader("🔍 確定した現在地")
+        # 念のためエラーが少ない順に表示
+        for m in sorted(results, key=lambda x: x['err'])[:3]:
+            with st.expander(f"{m['name']}", expanded=True):
+                st.write(f"📍 位置: 左 {m['lp']}枚目 / 右 {m['rp']}枚目")
+                st.info(f"**次予測**\n\n左 ➔ {m['nl']} ({get_rarity(m['nl'])})\n\n右 ➔ {m['nr']} ({get_rarity(m['nr'])})")
     else:
-        st.error("一致する配列が見つかりません。履歴が短いか、配列表に致命的な誤りがある可能性があります。")
+        st.error("一致する配列が範囲内にありません。履歴が間違っているか、左右の差が10枚を超えている可能性があります。")
