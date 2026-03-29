@@ -10,7 +10,7 @@ def get_rarity(n):
             101:"LRパラレル", 100:"SRパラレル", 99:"ランダムLR", 98:"ランダムSR",
             1:"LR", 16:"LR", 18:"LR", 27:"LR", 36:"LR", 48:"LR", 55:"LR", 58:"LR",
             7:"LLR", 26:"LLR", 61:"LLR",
-            5:"SR", 20:"SR", 24:"SR", 31:"SR", 33:"SR", 38:"SR", 40:"SR", 42:"SR", 46:"SR", 52:"SR", 63:"SR"
+            5:"SR", 20:"SR", 24:"SR", 25:"SR", 31:"SR", 33:"SR", 38:"SR", 40:"SR", 42:"SR", 46:"SR", 52:"SR", 63:"SR"
         }
         if n in rarities: return rarities[n]
         return "CP" if 64 <= n <= 77 else "N"
@@ -26,7 +26,6 @@ def load_data():
     try:
         df = pd.read_csv("配列.csv", header=None)
         patterns = {}
-        # 有効なカラムを抽出
         valid_cols = [c for c in range(len(df.columns)) if pd.to_numeric(df.iloc[1:, c], errors='coerce').dropna().count() > 3]
         for i in range(0, len(valid_cols) - 1, 2):
             l_idx, r_idx = valid_cols[i], valid_cols[i+1]
@@ -41,7 +40,6 @@ def load_data():
 def find_matches(history, L, R, mode="STRICT"):
     h_len = len(history)
     results = []
-    
     def match(a, b):
         if a == b: return True
         if mode == "FLEX":
@@ -49,71 +47,65 @@ def find_matches(history, L, R, mode="STRICT"):
             if a in sets and b in sets: return True
         return False
 
-    # 全位置スキャンの開始
     for side in ["L", "R"]:
         main, sub = (L, R) if side == "L" else (R, L)
         for p in range(len(main)):
-            # 1枚目が一致する場所を探す
             if match(history[0], main[p]):
-                # サブ（逆サイド）の初期位置候補を前後12枚に限定
-                sub_range = range(max(0, p-12), min(len(sub), p+13))
-                
-                for start_s in sub_range:
-                    # 履歴を1枚ずつ、物理的な並び順通りに追跡できるか検証
-                    curr_m = p + 1
-                    curr_s = start_s
+                for start_s in range(max(0, p-12), min(len(sub), p+13)):
+                    curr_m, curr_s = p + 1, start_s
                     possible = True
-                    
                     for i in range(1, h_len):
-                        # メイン筒の次にあるか？
                         if curr_m < len(main) and match(history[i], main[curr_m]):
                             curr_m += 1
-                        # サブ筒の次にあるか？
                         elif curr_s < len(sub) and match(history[i], sub[curr_s]):
                             curr_s += 1
                         else:
-                            # どちらの「次の1枚」にも当てはまらない＝データの飛びが発生
                             possible = False
                             break
-                    
                     if possible:
-                        results.append({
-                            "lp": curr_m if side=="L" else curr_s,
-                            "rp": curr_s if side=="L" else curr_m
-                        })
+                        results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
     return results
 
 # --- 4. UI設定 ---
-st.set_page_config(page_title="配列スキャナー", layout="wide")
-
+st.set_page_config(page_title="VR-1弾配列サーチ", layout="wide")
 st.markdown("""
     <style>
-    .next-num { font-size: 32px; font-weight: bold; color: #1f77b4; }
-    .rarity-tag { font-size: 14px; color: #666; }
+    .next-num { font-size: 36px; font-weight: bold; color: #1f77b4; }
+    .rarity-tag { font-size: 16px; color: #666; }
     .status-err { color: #ff4b4b; font-weight: bold; }
+    .history-text { font-size: 24px; font-weight: bold; background: #f0f2f6; padding: 10px; border-radius: 5px; }
+    .rare-info { font-size: 18px; line-height: 1.6; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📟 3段階 配列スキャナー")
+st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
+# 入力エリア
 with st.container():
-    c1, c2, c3 = st.columns([2, 1, 1])
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     with c1:
-        num = st.number_input("引いたカードの番号を入力", min_value=1, max_value=110, step=1, key="input_num")
+        # 入力後に消えるように key を毎回変えるハック
+        num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1, key=f"input_{len(st.session_state.history)}")
     with c2:
         st.write("##")
-        if st.button("➕ 追加", use_container_width=True):
+        if st.button("カード番号を入力", use_container_width=True):
             st.session_state.history.append(num)
             st.rerun()
     with c3:
         st.write("##")
-        if st.button("🧹 リセット", use_container_width=True):
+        if st.button("履歴いっこ消す", use_container_width=True):
+            if st.session_state.history:
+                st.session_state.history.pop()
+                st.rerun()
+    with c4:
+        st.write("##")
+        if st.button("履歴を消す", use_container_width=True):
             st.session_state.history = []
             st.rerun()
 
-st.markdown(f"**現在の履歴:** `{' → '.join(map(str, st.session_state.history))}`")
+st.markdown(f'<div class="history-text">履歴: {" → ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
 st.divider()
 
 # --- 5. 解析 & 表示 ---
@@ -126,11 +118,11 @@ if st.session_state.history and patterns:
         with col:
             st.subheader(title)
             if not active:
-                st.caption("⚠️ 条件未達成（枚数不足など）")
+                st.caption("枚数不足")
                 return
             
             if hits:
-                res = hits[0] # 最初の候補を表示
+                res = hits[0]
                 data = patterns[res['name']]
                 nl = data['L'][res['lp']] if res['lp'] < len(data['L']) else "END"
                 nr = data['R'][res['rp']] if res['rp'] < len(data['R']) else "END"
@@ -146,43 +138,42 @@ if st.session_state.history and patterns:
                     </div>
                 """, unsafe_allow_html=True)
                 
-                def get_dist(lst, p):
+                # 詳細なレアまでの距離
+                def get_all_rare_dists(lst, p):
+                    targets = ["LLR", "LR", "SRパラレル", "LRパラレル", "ランダムLR"]
+                    found = []
                     for i in range(p, len(lst)):
                         r = get_rarity(lst[i])
-                        if "LR" in r or "LLR" in r: return i-p, lst[i], r
-                    return None, None, None
-                dl, vl, rl = get_dist(data['L'], res['lp'])
-                dr, vr, rr = get_dist(data['R'], res['rp'])
-                st.caption(f"💎 LRまで: 左{f'{dl}枚' if dl is not None else '無'} / 右{f'{dr}枚' if dr is not None else '無'}")
+                        for t in targets:
+                            if t in r:
+                                found.append(f"{t}: {i-p}枚 ({lst[i]})")
+                                targets.remove(t) # 各レアリティ最初の1つだけ
+                        if not targets: break
+                    return found
+
+                dl_list = get_all_rare_dists(data['L'], res['lp'])
+                dr_list = get_all_rare_dists(data['R'], res['rp'])
+                
+                st.markdown('<div class="rare-info">', unsafe_allow_html=True)
+                if dl_list: st.write("**左・次以降のレア:**\n" + "\n".join([f"* {x}" for x in dl_list]))
+                if dr_list: st.write("**右・次以降のレア:**\n" + "\n".join([f"* {x}" for x in dr_list]))
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<p class="status-err">❌ 整合性エラー: データの飛びを検出</p>', unsafe_allow_html=True)
+                st.markdown('<p class="status-err">❌ 整合性エラー</p>', unsafe_allow_html=True)
 
-    # 方法1：レア優先
-    hits1 = []
-    active1 = (has_rare and len(h) >= 2)
-    if active1:
-        for name, data in patterns.items():
-            for hit in find_matches(h, data["L"], data["R"], mode="STRICT"):
-                hits1.append({**hit, "name": name})
-    display_result(route_cols[0], "🥇 レア優先", hits1, active1, "#FF4B4B")
-
-    # 方法2：N 3枚以上
+    display_result(route_cols[0], "🥇 レアカードある結果", hits=[h_item for name, data in patterns.items() for h_item in find_matches(h, data["L"], data["R"], mode="STRICT")][:1] if (has_rare and len(h)>=2) else [], active=(has_rare and len(h)>=2), color="#FF4B4B")
+    
+    # 手動ループで名前を保持
     hits2 = []
-    active2 = (len(h) >= 3)
-    if active2:
+    if len(h) >= 3:
         for name, data in patterns.items():
             for hit in find_matches(h, data["L"], data["R"], mode="STRICT"):
                 hits2.append({**hit, "name": name})
-    display_result(route_cols[1], "🥈 N 3枚一致", hits2, active2, "#1f77b4")
+    display_result(route_cols[1], "🥈 ノーマル三枚以上結果", hits2, active=(len(h)>=3), color="#1f77b4")
 
-    # 方法3：救済
     hits3 = []
-    active3 = (len(h) >= 3)
-    if active3:
+    if len(h) >= 3:
         for name, data in patterns.items():
             for hit in find_matches(h, data["L"], data["R"], mode="FLEX"):
                 hits3.append({**hit, "name": name})
-    display_result(route_cols[2], "🥉 救済(479系)", hits3, active3, "#ffaa00")
-
-else:
-    st.info("👈 カード番号を入力して追加してください。")
+    display_result(route_cols[2], "🥉 配列表のミス考慮結果", hits3, active=(len(h)>=3), color="#ffaa00")
