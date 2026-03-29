@@ -74,7 +74,8 @@ st.markdown("""
     .rarity-tag { font-size: 16px; color: #666; }
     .status-err { color: #ff4b4b; font-weight: bold; }
     .history-text { font-size: 24px; font-weight: bold; background: #f0f2f6; padding: 10px; border-radius: 5px; }
-    .rare-info { font-size: 18px; line-height: 1.6; }
+    .rare-info { font-size: 20px; line-height: 1.8; font-weight: bold; }
+    .rare-title { color: #d32f2f; margin-bottom: 5px; text-decoration: underline; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -82,11 +83,9 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 入力エリア
 with st.container():
     c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     with c1:
-        # 入力後に消えるように key を毎回変えるハック
         num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1, key=f"input_{len(st.session_state.history)}")
     with c2:
         st.write("##")
@@ -138,32 +137,43 @@ if st.session_state.history and patterns:
                     </div>
                 """, unsafe_allow_html=True)
                 
-                # 詳細なレアまでの距離
                 def get_all_rare_dists(lst, p):
                     targets = ["LLR", "LR", "SRパラレル", "LRパラレル", "ランダムLR"]
                     found = []
                     for i in range(p, len(lst)):
                         r = get_rarity(lst[i])
+                        found_this_step = []
                         for t in targets:
                             if t in r:
+                                found_this_step.append(t)
+                        if found_this_step:
+                            for t in found_this_step:
                                 found.append(f"{t}: {i-p}枚 ({lst[i]})")
-                                targets.remove(t) # 各レアリティ最初の1つだけ
+                                targets.remove(t)
                         if not targets: break
-                    return found
+                    return found if found else ["なし"]
 
                 dl_list = get_all_rare_dists(data['L'], res['lp'])
                 dr_list = get_all_rare_dists(data['R'], res['rp'])
                 
                 st.markdown('<div class="rare-info">', unsafe_allow_html=True)
-                if dl_list: st.write("**左・次以降のレア:**\n" + "\n".join([f"* {x}" for x in dl_list]))
-                if dr_list: st.write("**右・次以降のレア:**\n" + "\n".join([f"* {x}" for x in dr_list]))
+                st.markdown('<p class="rare-title">左・次以降のレア</p>', unsafe_allow_html=True)
+                for x in dl_list: st.write(f"・{x}")
+                st.markdown('<p class="rare-title" style="margin-top:10px;">右・次以降のレア</p>', unsafe_allow_html=True)
+                for x in dr_list: st.write(f"・{x}")
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.markdown('<p class="status-err">❌ 整合性エラー</p>', unsafe_allow_html=True)
 
-    display_result(route_cols[0], "🥇 レアカードある結果", hits=[h_item for name, data in patterns.items() for h_item in find_matches(h, data["L"], data["R"], mode="STRICT")][:1] if (has_rare and len(h)>=2) else [], active=(has_rare and len(h)>=2), color="#FF4B4B")
+    # 1. レアカードある結果 (KeyError修正済み)
+    hits1 = []
+    if has_rare and len(h) >= 2:
+        for name, data in patterns.items():
+            for hit in find_matches(h, data["L"], data["R"], mode="STRICT"):
+                hits1.append({**hit, "name": name})
+    display_result(route_cols[0], "🥇 レアカードある結果", hits1, active=(has_rare and len(h)>=2), color="#FF4B4B")
     
-    # 手動ループで名前を保持
+    # 2. ノーマル三枚以上結果
     hits2 = []
     if len(h) >= 3:
         for name, data in patterns.items():
@@ -171,9 +181,13 @@ if st.session_state.history and patterns:
                 hits2.append({**hit, "name": name})
     display_result(route_cols[1], "🥈 ノーマル三枚以上結果", hits2, active=(len(h)>=3), color="#1f77b4")
 
+    # 3. 配列表のミス考慮結果
     hits3 = []
     if len(h) >= 3:
         for name, data in patterns.items():
             for hit in find_matches(h, data["L"], data["R"], mode="FLEX"):
                 hits3.append({**hit, "name": name})
     display_result(route_cols[2], "🥉 配列表のミス考慮結果", hits3, active=(len(h)>=3), color="#ffaa00")
+
+else:
+    st.info("左側のサイドバーか入力欄から履歴を開始してください。")
