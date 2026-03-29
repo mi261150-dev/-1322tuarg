@@ -67,4 +67,72 @@ if 'history' not in st.session_state: st.session_state.history = []
 all_cols = load_data()
 
 with st.form("in_form", clear_on_submit=True):
-    num = st.number_input("カード番号を入力", min_value=1, max_value=
+    num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1)
+    if st.form_submit_button("追加"):
+        st.session_state.history.append(num)
+
+c1, c2 = st.columns(2)
+with c1:
+    if st.button("最後を1枚削除"):
+        if st.session_state.history: st.session_state.history.pop(); st.rerun()
+with c2:
+    if st.button("履歴を全リセット"):
+        st.session_state.history = []; st.rerun()
+
+st.write(f"**履歴:** {st.session_state.history}")
+
+# --- 5. 解析実行 ---
+if st.session_state.history and len(all_cols) >= 2:
+    memo = {}
+    results = []
+    h_tuple = tuple(st.session_state.history)
+    h_len = len(h_tuple)
+    
+    with st.spinner('解析中...'):
+        # 隣り合う2列をペア(1-2列目, 3-4列目...)としてスキャン
+        for i in range(0, len(all_cols) - 1, 2):
+            L_f, R_f = all_cols[i], all_cols[i+1]
+            pair_name = f"配列ペア {i//2 + 1}"
+            
+            for ls in range(len(L_f)):
+                # 左右差10枚の物理制約
+                for rs in range(max(0, ls-10), min(len(R_f), ls+11)):
+                    err, lu, ru = solve(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
+                    if err < h_len * 0.4:
+                        results.append({
+                            "name": pair_name, "err": err, "lp": ls+lu, "rp": rs+ru, "L_data": L_f, "R_data": R_f
+                        })
+
+    if results:
+        best = sorted(results, key=lambda x: (x['err'], abs(x['lp']-x['rp'])))[0]
+        trust = max(0, int(100 - (best['err'] / h_len * 200)))
+        
+        st.subheader(f"🔍 解析結果: {best['name']} (信頼度: {trust}%)")
+        
+        nl = best['L_data'][best['lp']] if best['lp'] < len(best['L_data']) else None
+        nr = best['R_data'][best['rp']] if best['rp'] < len(best['R_data']) else None
+        
+        col1, col2 = st.columns(2)
+        col1.success(f"**左 次予測**\n\n{nl} ({get_rarity(nl)})")
+        col2.info(f"**右 次予測**\n\n{nr} ({get_rarity(nr)})")
+
+        # LRカウントダウン
+        st.divider()
+        st.subheader("🏆 LRまでの残り枚数")
+        def find_next(lst, p):
+            for i in range(p, len(lst)):
+                if is_rare(lst[i]): return i - p, lst[i]
+            return None, None
+
+        dl, vl = find_next(best['L_data'], best['lp'])
+        dr, vr = find_next(best['R_data'], best['rp'])
+
+        cl, cr = st.columns(2)
+        with cl:
+            if dl is not None: st.metric("左のLRまで", f"{dl}枚"); st.caption(f"{vl}({get_rarity(vl)})")
+            else: st.write("左にLRなし")
+        with cr:
+            if dr is not None: st.metric("右のLRまで", f"{dr}枚"); st.caption(f"{vr}({get_rarity(vr)})")
+            else: st.write("右にLRなし")
+    else:
+        st.error("一致なし。")
