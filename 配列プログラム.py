@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 
+# --- 1. レアリティ判定とLR検索 ---
 def get_rarity(n):
     if not n: return ""
     try:
@@ -8,46 +9,41 @@ def get_rarity(n):
         rarities = {
             101:"LRパラレル", 100:"SRパラレル", 99:"ランダムLR", 98:"ランダムSR",
             7:"LLR", 26:"LLR", 61:"LLR",
-            1:"LR", 16:"LR", 18:"LR", 27:"LR", 36:"LR", 48:"LR", 55:"LR", 58:"LR",
-            5:"SR", 20:"SR", 24:"SR", 25:"SR", 31:"SR", 33:"SR", 38:"SR", 40:"SR", 42:"SR", 46:"SR", 52:"SR", 63:"SR"
+            1:"LR", 16:"LR", 18:"LR", 27:"LR", 36:"LR", 48:"LR", 55:"LR", 58:"LR"
         }
         if n in rarities: return rarities[n]
+        if 5 <= n <= 63: return "SR" # SRの範囲
         if 64 <= n <= 77: return "CP"
         return "N"
     except: return ""
 
-# --- 読み込み処理を最も堅実な方法に修正 ---
+def is_rare(n):
+    """LR系（当たり）かどうかを判定"""
+    r = get_rarity(n)
+    return "LR" in r or "LLR" in r
+
+# --- 2. 読み込み (2列1ペアを厳守) ---
 @st.cache_data
 def load_data():
     try:
-        # header=None で全てのデータを読み込む
         df = pd.read_csv("配列.csv", header=None)
         patterns = {}
+        valid_cols = []
+        for c in range(len(df.columns)):
+            # 数値が一定数以上ある列をデータ列とみなす
+            if pd.to_numeric(df.iloc[1:, c], errors='coerce').dropna().count() > 2:
+                valid_cols.append(c)
         
-        # 1列ずつ中身を確認
-        valid_columns = []
-        for col in range(len(df.columns)):
-            # その列に「2つ以上の数値」が含まれているか確認（タイトル行などを除外するため）
-            col_data = pd.to_numeric(df.iloc[:, col], errors='coerce').dropna()
-            if len(col_data) > 2:
-                valid_columns.append(col)
-        
-        # 見つかった「数値が入っている列」を2つずつペアにする
-        for i in range(0, len(valid_columns) - 1, 2):
-            p_idx = (i // 2) + 1
-            l_col = valid_columns[i]
-            r_col = valid_columns[i+1]
-            
-            l_list = pd.to_numeric(df.iloc[:, l_col], errors='coerce').dropna().astype(int).tolist()
-            r_list = pd.to_numeric(df.iloc[:, r_col], errors='coerce').dropna().astype(int).tolist()
-            
-            patterns[f"配列{p_idx}"] = {"L": l_list, "R": r_list}
-            
+        # 2列ペアで独立させて保存
+        for i in range(0, len(valid_cols) - 1, 2):
+            l_idx, r_idx = valid_cols[i], valid_cols[i+1]
+            l_list = pd.to_numeric(df.iloc[1:, l_idx], errors='coerce').dropna().astype(int).tolist()
+            r_list = pd.to_numeric(df.iloc[1:, r_idx], errors='coerce').dropna().astype(int).tolist()
+            patterns[f"配列{(i//2)+1}"] = {"L": l_list, "R": r_list}
         return patterns
-    except:
-        return {}
+    except: return {}
 
-# 判定ロジック（データ誤記補正）
+# --- 3. 判定ロジック (メモ化) ---
 memo = {}
 def solve(h, L, R):
     state = (len(h), len(L), len(R))
@@ -72,64 +68,86 @@ def solve(h, L, R):
     memo[state] = ans
     return ans
 
-st.set_page_config(page_title="最強精度配列判別", layout="centered")
-st.title("📱 配列判別 (読み込み安定版)")
+# --- 4. UI設定 ---
+st.set_page_config(page_title="高精度・LRサーチ", layout="centered")
+st.title("📱 配列判別 & LRサーチ")
 
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 現在読み込めているデータのプレビューを表示（デバッグ用）
-if patterns:
-    with st.expander("📊 読み込みデータ確認 (ここが正しくないと判別できません)"):
-        for name, data in patterns.items():
-            st.write(f"**{name}**: 左{len(data['L'])}枚 / 右{len(data['R'])}枚 読み込み中")
-else:
-    st.error("CSVデータの数値が読み込めません。")
+# サイドバーで読み込み状況確認
+with st.sidebar:
+    st.write("### 📊 データ確認")
+    if patterns:
+        for k, v in patterns.items():
+            st.write(f"{k}: L{len(v['L'])}枚 / R{len(v['R'])}枚")
+    else:
+        st.error("CSV読み込み失敗")
 
 with st.form("in_form", clear_on_submit=True):
     num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1)
     if st.form_submit_button("追加"):
         st.session_state.history.append(num)
 
-if st.button("リセット"):
+if st.button("履歴を消去"):
     st.session_state.history = []
     st.rerun()
 
-st.write(f"**現在の履歴:** {st.session_state.history}")
+st.write(f"**履歴:** {st.session_state.history}")
 
+# --- 5. 解析とカウントダウン表示 ---
 if st.session_state.history and patterns:
     memo = {}
     results = []
     h_tuple = tuple(st.session_state.history)
     h_len = len(h_tuple)
     
-    with st.spinner('解析中...'):
-        for name, data in patterns.items():
-            L_f, R_f = data["L"], data["R"]
-            for ls in range(len(L_f)):
-                for rs in range(max(0, ls-10), min(len(R_f), ls+11)):
-                    err, lu, ru = solve(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
-                    if err < h_len * 0.4:
-                        results.append({"name":name, "err":err, "lp":ls+lu, "rp":rs+ru,
-                                        "nl":L_f[ls+lu] if ls+lu<len(L_f) else None,
-                                        "nr":R_f[rs+ru] if rs+ru<len(R_f) else None})
+    for name, data in patterns.items():
+        L_f, R_f = data["L"], data["R"]
+        # その「配列名」の中だけでスキャン（配列跨ぎなし）
+        for ls in range(len(L_f)):
+            for rs in range(max(0, ls-10), min(len(R_f), ls+11)):
+                err, lu, ru = solve(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
+                if err < h_len * 0.4:
+                    results.append({"name":name, "err":err, "lp":ls+lu, "rp":rs+ru, "data":data})
 
     if results:
-        unique_results = []
-        seen = set()
-        sorted_res = sorted(results, key=lambda x: (x['err'], abs(x['lp']-x['rp'])))
-        for r in sorted_res:
-            pos = (r['name'], r['lp'], r['rp'])
-            if pos not in seen:
-                unique_results.append(r); seen.add(pos)
+        # スコアが良いものを1つ選ぶ
+        best = sorted(results, key=lambda x: (x['err'], abs(x['lp']-x['rp'])))[0]
+        
+        st.subheader(f"🔍 解析結果: {best['name']}")
+        
+        # 次の予測
+        nl = best['data']['L'][best['lp']] if best['lp'] < len(best['data']['L']) else None
+        nr = best['data']['R'][best['rp']] if best['rp'] < len(best['data']['R']) else None
+        
+        c1, c2 = st.columns(2)
+        c1.success(f"**左 次予測**\n\n{nl} ({get_rarity(nl)})")
+        c2.info(f"**右 次予測**\n\n{nr} ({get_rarity(nr)})")
 
-        st.subheader("🔍 解析結果")
-        for m in unique_results[:3]:
-            trust = max(0, int(100 - (m['err'] / h_len * 150)))
-            with st.expander(f"【{m['name']}】 信頼度: {trust}%", expanded=(trust > 50)):
-                st.write(f"位置: 左{m['lp']} / 右{m['rp']}")
-                c1, c2 = st.columns(2)
-                c1.success(f"**左 次予測**\n\n{m['nl']} ({get_rarity(m['nl'])})")
-                c2.info(f"**右 次予測**\n\n{m['nr']} ({get_rarity(m['nr'])})")
+        # --- LRカウントダウン ---
+        st.divider()
+        st.subheader("🏆 レアカードまでの残り枚数")
+        
+        def find_next_rare(lst, current_pos):
+            for i in range(current_pos, len(lst)):
+                if is_rare(lst[i]):
+                    return i - current_pos, lst[i]
+            return None, None
+
+        dist_l, val_l = find_next_rare(best['data']['L'], best['lp'])
+        dist_r, val_r = find_next_rare(best['data']['R'], best['rp'])
+
+        col_l, col_r = st.columns(2)
+        with col_l:
+            if dist_l is not None:
+                st.metric("左のLRまで", f"{dist_l} 枚")
+                st.caption(f"内容: {val_l} ({get_rarity(val_l)})")
+            else: st.write("左にLRなし")
+        with col_r:
+            if dist_r is not None:
+                st.metric("右のLRまで", f"{dist_r} 枚")
+                st.caption(f"内容: {val_r} ({get_rarity(val_r)})")
+            else: st.write("右にLRなし")
     else:
         st.error("一致なし。")
