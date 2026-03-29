@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 
-# --- 1. レアリティ判定 (N以外をフックにする) ---
+# --- 1. レアリティ定義 ---
 def get_rarity(n):
-    if n is None: return ""
+    if not n: return ""
     try:
         n = int(n)
         rarities = {
@@ -16,52 +16,11 @@ def get_rarity(n):
         return "CP" if 64 <= n <= 77 else "N"
     except: return ""
 
-def get_weight(n):
-    """カードの重要度を返す。レアカードほど特定能力が高い"""
+def is_rare(n):
     r = get_rarity(n)
-    if "LR" in r or "LLR" in r: return 5.0  # LR一致は超重要
-    if "SR" in r or "CP" in r: return 2.0   # SR/CPも重要
-    return 1.0                              # Nは参考程度
+    return any(x in r for x in ["LR", "LLR", "SR", "CP"])
 
-# --- 2. 判定ロジック (重み付きスコアリング) ---
-def solve_with_trust(h, L, R):
-    memo = {}
-    def solve_internal(hh, ll, rr):
-        state = (len(hh), len(ll), len(rr))
-        if state in memo: return memo[state]
-        if not hh: return 0, 0, 0
-        
-        target = hh[0]
-        w = get_weight(target)
-        
-        # 左筒からの排出をシミュレート
-        res_l = (999, 0, 0)
-        if ll:
-            # 一致なら0点、不一致なら重み分のペナルティ
-            penalty = 0 if target == ll[0] else w
-            # 4,7,9の読み替え救済 (不一致ペナルティを軽減)
-            if target != ll[0] and target in {4,7,9} and ll[0] in {4,7,9}:
-                penalty = w * 0.2
-                
-            e, lu, ru = solve_internal(hh[1:], ll[1:], rr)
-            res_l = (penalty + e, lu + 1, ru)
-            
-        # 右筒からの排出をシミュレート
-        res_r = (999, 0, 0)
-        if rr:
-            penalty = 0 if target == rr[0] else w
-            if target != rr[0] and target in {4,7,9} and rr[0] in {4,7,9}:
-                penalty = w * 0.2
-                
-            e, lu, ru = solve_internal(hh[1:], ll, rr[1:])
-            res_r = (penalty + e, lu, ru + 1)
-            
-        ans = res_l if res_l[0] <= res_r[0] else res_r
-        memo[state] = ans
-        return ans
-    return solve_internal(h, L, R)
-
-# --- 3. データ読み込み ---
+# --- 2. データ読み込み ---
 @st.cache_data
 def load_data():
     try:
@@ -77,82 +36,130 @@ def load_data():
         return patterns
     except: return {}
 
+# --- 3. 核心：三段階・物理制約探索アルゴリズム ---
+def professional_search(history, L, R, mode="STRICT"):
+    """
+    mode "STRICT": 厳密一致
+    mode "FLEX": 4,7,9の読み替えを許容
+    """
+    h_len = len(history)
+    results = []
+    
+    def match_score(a, b):
+        if a == b: return True
+        if mode == "FLEX":
+            sets = [{4, 7, 9, 14, 17, 19, 24, 27, 29, 34, 37, 39, 44, 47, 49}] # 4,7,9系
+            for s in sets:
+                if a in s and b in s: return True
+        return False
+
+    # 1枚目をLかRから探す
+    for side in ["L", "R"]:
+        main_list = L if side == "L" else R
+        sub_list = R if side == "L" else L
+        
+        for p in range(len(main_list)):
+            if match_score(history[0], main_list[p]):
+                # 1枚目発見。ここを起点に「履歴全体」が左右±12枚に収まるか検証
+                # memo化再帰で全パターンの最小エラーを探す
+                memo = {}
+                def verify(h_idx, m_pos, s_pos):
+                    state = (h_idx, m_pos, s_pos)
+                    if state in memo: return memo[state]
+                    if h_idx == h_len: return 0, m_pos, s_pos
+                    
+                    res = (999, 0, 0)
+                    # メイン側から出た場合
+                    if m_pos < len(main_list) and match_score(history[h_idx], main_list[m_pos]):
+                        err, final_m, final_s = verify(h_idx + 1, m_pos + 1, s_pos)
+                        if err < res[0]: res = (err, final_m, final_s)
+                    
+                    # サブ(隣)側から出た場合（メイン開始位置の前後12枚以内という制約）
+                    if s_pos < len(sub_list) and abs(s_pos - p) <= 12:
+                        if match_score(history[h_idx], sub_list[s_pos]):
+                            err, final_m, final_s = verify(h_idx + 1, m_pos, s_pos + 1)
+                            if err < res[0]: res = (err, final_m, final_s)
+                    
+                    memo[state] = res
+                    return res
+
+                error, end_m, end_s = verify(1, p + 1, 0) # 2枚目から検証開始
+                # サブ側の初期位置(s_pos)はメインのp周辺12枚から自動探索される
+                # ここでは初期s_posを全パターン試す必要があるためループ
+                for start_s in range(max(0, p-12), min(len(sub_list), p+13)):
+                    error, end_m, end_s = verify(1, p + 1, start_s)
+                    if error == 0:
+                        results.append({
+                            "lp": end_m if side=="L" else end_s,
+                            "rp": end_s if side=="L" else end_m,
+                            "trust": 100
+                        })
+    return results
+
 # --- 4. メインUI ---
-st.set_page_config(page_title="高精度配列サーチ", layout="centered")
-st.title("🎯 配列特定 (信頼度正常化版)")
+st.set_page_config(page_title="プロ仕様配列スキャン", layout="centered")
+st.title("🎯 配列特定アルゴリズム")
 
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-with st.form("input_area", clear_on_submit=True):
-    num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1)
-    if st.form_submit_button("追加"):
-        st.session_state.history.append(num)
+with st.form("in"):
+    num = st.number_input("番号入力", min_value=1, max_value=110, step=1)
+    if st.form_submit_button("追加"): st.session_state.history.append(num); st.rerun()
 
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("1枚消す"):
-        if st.session_state.history: st.session_state.history.pop(); st.rerun()
-with col2:
-    if st.button("全消去"):
-        st.session_state.history = []; st.rerun()
+if st.button("リセット"): st.session_state.history = []; st.rerun()
 
 st.write(f"**履歴:** {st.session_state.history}")
 
 if st.session_state.history and patterns:
-    h_tuple = tuple(st.session_state.history)
-    max_penalty_possible = sum(get_weight(n) for n in h_tuple)
-    all_results = []
-    
-    with st.spinner('精密スキャン中...'):
+    h = st.session_state.history
+    has_rare = any(is_rare(n) for n in h)
+    found_any = []
+
+    # ステップ1 & 2: 厳密検索
+    if (has_rare and len(h) >= 2) or (not has_rare and len(h) >= 3):
         for name, data in patterns.items():
-            L, R = data["L"], data["R"]
-            # 物理的にあり得る範囲(±15枚)を全探索
-            for ls in range(len(L)):
-                for rs in range(max(0, ls-15), min(len(R), ls+16)):
-                    # 1枚目が合う場所を起点にする(高速化&精度)
-                    if L[ls] == h_tuple[0] or R[rs] == h_tuple[0]:
-                        penalty, lu, ru = solve_with_trust(h_tuple, tuple(L[ls:]), tuple(R[rs:]))
-                        
-                        # 信頼度計算: (1 - ペナルティ合計 / 最大ペナルティ)
-                        trust = int((1 - (penalty / max_penalty_possible)) * 100)
-                        
-                        if trust > 40: # 信頼度が低すぎるゴミデータは除外
-                            all_results.append({
-                                "name": name, "trust": trust, "lp": ls+lu, "rp": rs+ru, "data": data
-                            })
+            hits = professional_search(h, data["L"], data["R"], mode="STRICT")
+            for hit in hits:
+                hit["name"] = name
+                found_any.append(hit)
 
-    if all_results:
-        # 信頼度が高い順、かつ進み具合が自然な順
-        sorted_res = sorted(all_results, key=lambda x: (-x['trust'], abs(x['lp']-x['rp'])))
-        
-        # 重複排除
-        unique_res = []
+    # ステップ3: 柔軟検索 (配列表ミス考慮)
+    if not found_any:
+        st.warning("厳密一致なし。配列表ミス(4,7,9)を考慮して再検索します...")
+        for name, data in patterns.items():
+            hits = professional_search(h, data["L"], data["R"], mode="FLEX")
+            for hit in hits:
+                hit["name"] = name
+                hit["trust"] = 70 # 読み替えが発生しているため信頼度を下げる
+                found_any.append(hit)
+
+    if found_any:
+        # 重複を消して上位2つ
+        unique_results = []
         seen = set()
-        for r in sorted_res:
-            key = (r['name'], r['lp'], r['rp'])
-            if key not in seen:
-                unique_res.append(r)
-                seen.add(key)
-            if len(unique_res) >= 2: break
-
-        for i, res in enumerate(unique_res):
-            st.subheader(f"{'🥇' if i==0 else '🥈'} {res['name']} (信頼度: {res['trust']}%)")
+        for f in found_any:
+            k = (f['name'], f['lp'], f['rp'])
+            if k not in seen:
+                unique_results.append(f); seen.add(k)
+        
+        for idx, res in enumerate(unique_results[:2]):
+            st.subheader(f"{'🥇' if idx==0 else '🥈'} {res['name']} (信頼度: {res['trust']}%)")
+            data = patterns[res['name']]
+            nl = data['L'][res['lp']] if res['lp'] < len(data['L']) else "END"
+            nr = data['R'][res['rp']] if res['rp'] < len(data['R']) else "END"
             
-            nl = res['data']['L'][res['lp']] if res['lp'] < len(res['data']['L']) else "END"
-            nr = res['data']['R'][res['rp']] if res['rp'] < len(res['data']['R']) else "END"
+            c1, c2 = st.columns(2)
+            c1.success(f"**左 次予測**\n# {nl}\n({get_rarity(nl)})")
+            c2.info(f"**右 次予測**\n# {nr}\n({get_rarity(nr)})")
             
-            c_l, c_r = st.columns(2)
-            c_l.success(f"**左 次予測**\n# {nl}\n({get_rarity(nl)})")
-            c_r.info(f"**右 次予測**\n# {nr}\n({get_rarity(nr)})")
-            
-            # カウントダウン
-            with st.expander("この先のLR位置を確認"):
-                for side, lst, pos in [("左", res['data']['L'], res['lp']), ("右", res['data']['R'], res['rp'])]:
-                    for j in range(pos, len(lst)):
-                        rare = get_rarity(lst[j])
-                        if "LR" in rare or "LLR" in rare:
-                            st.write(f"{side}筒: あと **{j-pos}枚** で {lst[j]}({rare})")
-                            break
+            # LRまでの距離
+            def get_dist(lst, p):
+                for i in range(p, len(lst)):
+                    if "LR" in get_rarity(lst[i]): return i-p, lst[i]
+                return None, None
+            dl, vl = get_dist(data['L'], res['lp'])
+            dr, vr = get_dist(data['R'], res['rp'])
+            st.write(f"💎 **LRまで**: 左 {f'{dl}枚({vl})' if dl is not None else 'なし'} / 右 {f'{dr}枚({vr})' if dr is not None else 'なし'}")
     else:
-        st.error("一致なし。番号が違うか、配列が混ざっている可能性があります。")
+        st.error("エラー：条件に一致する配列が見つかりません。")
