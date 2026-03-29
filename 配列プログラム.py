@@ -76,3 +76,40 @@ if st.session_state.history and patterns:
             L_f, R_f = data["L"], data["R"]
             # 全範囲スキャン
             for ls in range(len(L_f)):
+                # 左右の差が10枚以内の範囲のみ
+                for rs in range(max(0, ls-10), min(len(R_f), ls+11)):
+                    err, lu, ru = solve(h_tuple, tuple(L_f[ls:]), tuple(R_f[rs:]))
+                    if err == 0: # 完全一致のみ
+                        results.append({
+                            "name": name, "lp": ls+lu, "rp": rs+ru,
+                            "nl": L_f[ls+lu] if ls+lu < len(L_f) else None,
+                            "nr": R_f[rs+ru] if rs+ru < len(R_f) else None
+                        })
+
+    if results:
+        # 重複を排除（同じ現在地の候補をまとめる）
+        unique_results = []
+        seen = set()
+        for r in results:
+            pos = (r['name'], r['lp'], r['rp'])
+            if pos not in seen:
+                unique_results.append(r)
+                seen.add(pos)
+
+        for m in unique_results[:3]:
+            with st.expander(f"【{m['name']}】", expanded=True):
+                st.write(f"📍 現在位置: 左 {m['lp']}枚目 / 右 {m['rp']}枚目")
+                
+                # 特定の筒が進んでいない場合の警告
+                h_len = len(st.session_state.history)
+                # 全て右から出た場合（lu=0）など
+                if (m['lp'] - (m['lp'] - h_len)) == 0 or (m['rp'] - (m['rp'] - h_len)) == 0:
+                    st.warning("⚠️ 片側の筒しか進んでいないため、もう一方は予測範囲です（誤差±10枚）")
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.success(f"**左 次予測**\n\n{m['nl']} ({get_rarity(m['nl'])})")
+                with col2:
+                    st.info(f"**右 次予測**\n\n{m['nr']} ({get_rarity(m['nr'])})")
+    else:
+        st.error("一致なし。10枚以上のズレがあるか、番号間違い、あるいは別の配列です。")
