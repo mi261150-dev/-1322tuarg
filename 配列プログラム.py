@@ -64,7 +64,6 @@ def find_matches(history, L, R, mode="STRICT"):
                             possible = False
                             break
                     if possible:
-                        # 修正箇所: 辞書を一行にまとめて SyntaxError を回避
                         results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
     return results
 
@@ -79,6 +78,9 @@ st.markdown("""
     }
     div[data-testid="column"] { display: flex; align-items: flex-end; }
     .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 2px; }
+    /* 入力欄の高さをボタンに合わせる */
+    .stNumberInput input { height: 3.2em !important; }
+    
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box {
@@ -101,13 +103,12 @@ patterns = load_data()
 with st.container():
     c_in, c_add = st.columns([1, 1], gap="small")
     with c_in:
-        num_list = list(range(1, 111))
-        num = st.selectbox("カード番号を選択", num_list, key=f"sel_{len(st.session_state.history)}")
+        # スクロールなしの直接入力。step=Noneで+/-を消し、label_visibilityでスッキリさせる
+        num = st.number_input("番号入力", min_value=1, max_value=110, value=1, step=1, label_visibility="collapsed")
     with c_add:
         if st.button("✅ 上の番号で確定"):
-            st.session_state.history.append(num); st.rerun()
+            st.session_state.history.append(int(num)); st.rerun()
 
-    # 横並びを強制
     c_sub_l, c_sub_r = st.columns(2, gap="small")
     with c_sub_l:
         if st.button("⬅️ 1個消す"):
@@ -121,9 +122,9 @@ if st.session_state.history:
     st.markdown(f'<div class="history-box">出たカード: {" > ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
     st.markdown("""
         <div class="method-guide">
-            <b>方法①レアから探索</b>: SR以上のレアカードを含む2枚以上の履歴から厳密に特定。<br>
+            <b>方法①レアから探索</b>: SR以上のレアカードを含む3枚以上の履歴から特定。<br>
             <b>方法②ノーマル4枚以上</b>: ノーマル(N)のみでも4枚以上から特定。<br>
-            <b>方法③ミス考慮</b>: 4,7,9などの配列表のミスを許容しつつ、3枚以上の並びから特定。
+            <b>方法③ミス考慮</b>: 4,7,9などの配列表のミスを許容しつつ、4枚以上の並びから特定。
         </div>
     """, unsafe_allow_html=True)
 
@@ -183,12 +184,12 @@ if st.session_state.history and patterns:
                     for item in get_rare_info(d['R'], res['rp']): st.write(f"・{item}", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="status-err">❌ 整合性エラー<br><span style="font-size:14px;">(配列表にない並びです)</span></div>', unsafe_allow_html=True)
+                st.markdown('<div class="status-err">❌ 整合性エラー</div>', unsafe_allow_html=True)
 
     render_content(tab1, "STRICT", (has_rare and len(h)>=2), "#FF4B4B")
     render_content(tab2, "STRICT", (len(h)>=3), "#1f77b4")
     render_content(tab3, "FLEX", (len(h)>=3), "#ffaa00")
 
 else:
-    st.info("カード番号を選択して確定ボタンを押してください")
+    st.info("番号を入力して確定ボタンを押してください")
     
