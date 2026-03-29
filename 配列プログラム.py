@@ -36,7 +36,7 @@ def load_data():
         return patterns
     except: return {}
 
-# --- 3. 探索エンジン (厳密バリデーション) ---
+# --- 3. 探索エンジン ---
 def find_matches(history, L, R, mode="STRICT"):
     if not history: return []
     h_len = len(history)
@@ -67,27 +67,24 @@ def find_matches(history, L, R, mode="STRICT"):
                         results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
     return results
 
-# --- 4. UI設定 (スマホ最適化) ---
+# --- 4. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    .stButton > button { width: 100%; height: 3em; font-weight: bold; margin-bottom: 5px; }
+    /* 入力パーツの横並び調整 */
+    div[data-testid="column"] { display: flex; align-items: flex-end; }
+    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 0px; }
+    
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box {
         background: #262730; color: #ffffff; padding: 12px;
         border-radius: 8px; font-size: 20px; font-weight: bold;
         margin-bottom: 10px; border-left: 5px solid #ff4b4b;
-        word-wrap: break-word;
     }
-    .method-guide {
-        background: #f0f2f6; padding: 10px; border-radius: 8px;
-        font-size: 14px; color: #444; margin-bottom: 15px;
-    }
-    .method-guide b { color: #1f77b4; }
+    .method-guide { background: #f0f2f6; padding: 10px; border-radius: 8px; font-size: 14px; color: #444; margin-bottom: 15px; }
     .rare-card { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 10px; margin-top: 10px; }
-    .rare-dest { font-size: 20px; font-weight: bold; color: #333; margin-bottom: 5px; }
     .status-err { color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px; }
     </style>
     """, unsafe_allow_html=True)
@@ -97,47 +94,48 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 入力エリア
+# --- 入力エリア (横並び) ---
 with st.container():
-    num = st.number_input("カード番号を入力", min_value=1, max_value=110, step=1, key=f"in_{len(st.session_state.history)}")
-    c_btns = st.columns([2, 1, 1])
-    with c_btns[0]:
+    c_in, c_add = st.columns([1, 1])
+    with c_in:
+        # 数字スクロール方式 (selectbox)
+        num_list = list(range(1, 111))
+        num = st.selectbox("カード番号を選択", num_list, key=f"sel_{len(st.session_state.history)}")
+    with c_add:
         if st.button("➕ カード番号を入力"):
             st.session_state.history.append(num); st.rerun()
-    with c_btns[1]:
+
+    c_sub_btns = st.columns(2)
+    with c_sub_btns[0]:
         if st.button("⬅️ 1個消す"):
             if st.session_state.history: st.session_state.history.pop(); st.rerun()
-    with c_btns[2]:
-        if st.button("🗑️ 消す"):
+    with c_sub_btns[1]:
+        if st.button("🗑️ 履歴を消す"):
             st.session_state.history = []; st.rerun()
 
-# 履歴とガイド
+# 出たカードとガイド
 if st.session_state.history:
-    st.markdown(f'<div class="history-box">履歴: {" > ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
-    
-    # 解析方法の説明ガイド
+    st.markdown(f'<div class="history-box">出たカード: {" > ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
     st.markdown("""
         <div class="method-guide">
-            <b>方法①レアから探索</b>: SR以上のレアカードを含む2枚以上の履歴から厳密に特定します。<br>
-            <b>方法②ノーマル三枚以上</b>: ノーマル(N)のみでも3枚以上連続していれば場所を特定します。<br>
-            <b>方法③ミス考慮</b>: 4,7,9などの配列表ミスを許容しつつ、3枚以上の並びから特定します。
+            <b>方法①レアから探索</b>: SR以上のレアカードを含む３枚以上の履歴から厳密に特定。<br>
+            <b>方法②ノーマル三枚以上</b>: ノーマル(N)のみでも4枚から特定。<br>
+            <b>方法③ミス考慮</b>: 4,7,9などの配列表のミスを許容しつつ、4枚以上の並びから特定。
         </div>
     """, unsafe_allow_html=True)
-else:
-    st.info("番号を入力して追加してください")
 
 st.divider()
 
-# --- 5. 解析 & タブ表示 ---
-if st.session_state.history and patterns:
+# --- 5. 解析 & 表示 ---
+if st.session_state.history and patterns４
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
-    tab1, tab2, tab3 = st.tabs(["🥇 レアあり", "🥈 3枚一致", "🥉 ミス考慮"])
+    tab1, tab2, tab3 = st.tabs(["① レアあり", "② 雑魚４枚", "③配列のミス考慮"])
 
     def render_content(tab_obj, mode, active_req, color):
         with tab_obj:
             if not active_req:
-                st.warning("枚数不足（レアありは2枚、その他は3枚必要です）")
+                st.warning("枚数不足")
                 return
             all_hits = []
             for name, data in patterns.items():
@@ -175,10 +173,10 @@ if st.session_state.history and patterns:
                 st.markdown('<div class="rare-card">', unsafe_allow_html=True)
                 c_l, c_r = st.columns(2)
                 with c_l:
-                    st.markdown('<div class="rare-dest">左のレア</div>', unsafe_allow_html=True)
+                    st.write("**左のレア**")
                     for item in get_rare_info(d['L'], res['lp']): st.write(f"・{item}", unsafe_allow_html=True)
                 with c_r:
-                    st.markdown('<div class="rare-dest">右のレア</div>', unsafe_allow_html=True)
+                    st.write("**右のレア**")
                     for item in get_rare_info(d['R'], res['rp']): st.write(f"・{item}", unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
@@ -187,6 +185,3 @@ if st.session_state.history and patterns:
     render_content(tab1, "STRICT", (has_rare and len(h)>=2), "#FF4B4B")
     render_content(tab2, "STRICT", (len(h)>=3), "#1f77b4")
     render_content(tab3, "FLEX", (len(h)>=3), "#ffaa00")
-
-else:
-    st.markdown('<div style="text-align: center; padding: 50px 20px; color: #888;">番号を入力して追加！</div>', unsafe_allow_html=True)
