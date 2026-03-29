@@ -102,11 +102,12 @@ with st.container():
         if st.button("✅ 上の番号で確定"):
             st.session_state.history.append(num); st.rerun()
 
-    c_sub_btns = st.columns(2)
-    with c_sub_btns[0]:
+    # ここを横並びに修正
+    c_sub_l, c_sub_r = st.columns(2)
+    with c_sub_l:
         if st.button("⬅️ 1個消す"):
             if st.session_state.history: st.session_state.history.pop(); st.rerun()
-    with c_sub_btns[1]:
+    with c_sub_r:
         if st.button("🗑️ 履歴を消す"):
             st.session_state.history = []; st.rerun()
 
