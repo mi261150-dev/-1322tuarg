@@ -6,10 +6,16 @@ def get_rarity(n):
     if not n: return ""
     try:
         n = int(n)
+        # 特定番号の名前定義
+        names = {
+            1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
+            26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
+            55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3"
+        }
+        if n in names: return names[n]
+
         rarities = {
-            101:"LRパラレル", 100:"SRパラレル", 99:"ランダムLR", 98:"ランダムSR",
-            1:"LR", 16:"LR", 18:"LR", 27:"LR", 36:"LR", 48:"LR", 55:"LR", 58:"LR",
-            7:"LLR", 26:"LLR", 61:"LLR",
+            99:"ランダムLR", 98:"ランダムSR",
             5:"SR", 20:"SR", 24:"SR", 25:"SR", 31:"SR", 33:"SR", 38:"SR", 40:"SR", 42:"SR", 46:"SR", 52:"SR", 63:"SR"
         }
         if n in rarities: return rarities[n]
@@ -78,7 +84,6 @@ st.markdown("""
     }
     div[data-testid="column"] { display: flex; align-items: flex-end; }
     .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 2px; }
-    /* 入力欄の高さをボタンに合わせる */
     .stNumberInput input { height: 3.2em !important; }
     
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
@@ -103,7 +108,6 @@ patterns = load_data()
 with st.container():
     c_in, c_add = st.columns([1, 1], gap="small")
     with c_in:
-        # スクロールなしの直接入力。step=Noneで+/-を消し、label_visibilityでスッキリさせる
         num = st.number_input("番号入力", min_value=1, max_value=110, value=1, step=1, label_visibility="collapsed")
     with c_add:
         if st.button("✅ 上の番号で確定"):
@@ -122,9 +126,9 @@ if st.session_state.history:
     st.markdown(f'<div class="history-box">出たカード: {" > ".join(map(str, st.session_state.history))}</div>', unsafe_allow_html=True)
     st.markdown("""
         <div class="method-guide">
-            <b>方法①レアから探索</b>: SR以上のレアカードを含む3枚以上の履歴から特定。<br>
+            <b>方法①レアから探索</b>: SR以上のレアカードを含む2枚以上の履歴から厳密に特定。<br>
             <b>方法②ノーマル4枚以上</b>: ノーマル(N)のみでも4枚以上から特定。<br>
-            <b>方法③ミス考慮</b>: 4,7,9などの配列表のミスを許容しつつ、4枚以上の並びから特定。
+            <b>方法③ミス考慮</b>: 4,7,9などの配列表のミスを許容しつつ、3枚以上の並びから特定。
         </div>
     """, unsafe_allow_html=True)
 
@@ -169,7 +173,7 @@ if st.session_state.history and patterns:
                         r = get_rarity(lst[i])
                         for t in targets[:]:
                             if t in r:
-                                info.append(f"<b>{t}</b>: {i-p}枚先 ({lst[i]})")
+                                info.append(f"<b>{r}</b>: {i-p}枚先 ({lst[i]})")
                                 targets.remove(t)
                         if not targets: break
                     return info if info else ["なし"]
@@ -192,4 +196,3 @@ if st.session_state.history and patterns:
 
 else:
     st.info("番号を入力して確定ボタンを押してください")
-    
