@@ -81,7 +81,7 @@ def color_red_history(val):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
-# CSS: セル選択時の枠線、ツールバー、並び替えを徹底的に無効化
+# CSS: セル選択の無効化（pointer-events等）
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
@@ -92,29 +92,25 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
-    /* 1. ツールバー（ダウンロード等）を非表示 */
-    [data-testid="stElementToolbar"] { display: none !important; }
+    /* 1. ツールバーと検索機能を非表示 */
+    [data-testid="stElementToolbar"], 
+    [data-testid="stDataFrameSearch"] { display: none !important; }
     
-    /* 2. セル選択時の枠線（フォーカス）を完全に消す */
+    /* 2. セル選択時のエフェクトを完全に殺す */
     [data-testid="stDataFrame"] div:focus,
-    [data-testid="stDataFrame"] canvas:focus,
-    [data-testid="stDataFrame"] [role="gridcell"]:focus {
-        outline: none !important;
-        box-shadow: none !important;
-    }
+    [data-testid="stDataFrame"] canvas:focus { outline: none !important; }
     
-    /* 3. 並び替えを無効化（ヘッダーのクリックを禁止） */
-    [data-testid="stDataFrame"] th {
-        pointer-events: none !important;
+    /* 3. ヘッダーの並び替え・メニューを無効化 */
+    [data-testid="stDataFrame"] th { 
+        pointer-events: none !important; 
         user-select: none !important;
     }
     
-    /* 4. 並び替えアイコンを非表示 */
-    [data-testid="stDataFrame"] [data-testid="stIcon"] {
-        display: none !important;
+    /* 4. セルのクリック反応を制限（スクロールは可能にするため、canvas自体は残す） */
+    [data-testid="stDataFrame"] canvas {
+        cursor: default !important;
     }
 
-    /* 5. テーブル内の文字サイズ設定 */
     div[data-testid="stDataFrame"] td { font-size: 20px !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -167,7 +163,8 @@ with all_patterns_tab:
         st.dataframe(
             df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), 
             use_container_width=True, 
-            hide_index=True
+            hide_index=True,
+            on_select=None # 選択機能を明示的に無効化
         )
 
 # --- 7. 解析結果表示 ---
@@ -210,7 +207,6 @@ if st.session_state.history and patterns:
                     idx_l, idx_r = start_l + i, start_r + i
                     l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
                     r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
-                    
                     def get_detail_disp(v):
                         if v is None: return ""
                         r_name = get_rarity(v)
@@ -218,39 +214,3 @@ if st.session_state.history and patterns:
                         return str(v)
 
                     detail_data.append({
-                        "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
-                        "左": get_detail_disp(l_v),
-                        "右": get_detail_disp(r_v)
-                    })
-                df_det = pd.DataFrame(detail_data)
-                st.dataframe(
-                    df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), 
-                    use_container_width=True, 
-                    hide_index=True
-                )
-
-                st.write("### 💎 以降のレアカード一覧")
-                rare_list = []
-                for side in ["L", "R"]:
-                    current_p = best['lp'] if side == "L" else best['rp']
-                    target_list = d[side]
-                    for i in range(current_p, len(target_list)):
-                        v = target_list[i]
-                        if is_rare(v):
-                            rare_list.append({
-                                "シリンダー": "左" if side == "L" else "右",
-                                "枚数先": i - current_p + 1,
-                                "カード名": get_rarity(v)
-                            })
-                if rare_list:
-                    df_rare = pd.DataFrame(rare_list).sort_values("枚数先")
-                    st.table(df_rare)
-                else:
-                    st.write("この先にレアカードは見つかりませんでした。")
-            else:
-                st.markdown('<div style="color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px;">❌ 一致なし</div>', unsafe_allow_html=True)
-
-    render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
-    render_result(tab_res2, (len(h)>=4), "#1f77b4")
-else:
-    st.info("カード番号を入力してください")
