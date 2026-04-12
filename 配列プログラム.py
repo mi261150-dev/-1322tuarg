@@ -72,7 +72,6 @@ def find_matches(history, L, R):
 def highlight_numbers(val):
     if not val: return ""
     str_val = str(val)
-    # 数字のみ抽出して履歴チェック
     num_match = re.search(r'\d+', str_val)
     if num_match:
         if int(num_match.group()) in st.session_state.history:
@@ -92,17 +91,19 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
-    /* スクロールエリア */
-    .scroll-box { height: 450px; overflow-y: auto; border: 1px solid #444; background: #0e1117; }
+    /* スクロールエリア（背景は透過/白ベースに修正） */
+    .scroll-box { height: 450px; overflow-y: auto; border: 1px solid #ddd; background: transparent; }
     
-    /* st.tableの空白列(Index)を消すCSS */
-    div[data-testid="stTable"] table thead tr th:first-child { display: none !important; }
-    div[data-testid="stTable"] table tbody tr td:first-child { display: none !important; }
+    /* 余計な空白列（Index）を物理的に消す */
+    .scroll-box table thead tr th:first-child,
+    .scroll-box table tbody tr td:first-child { 
+        display: none !important; 
+    }
     
-    /* テーブルスタイル */
-    div[data-testid="stTable"] table { width: 100% !important; font-size: 20px !important; border-collapse: collapse; }
-    div[data-testid="stTable"] th { background-color: #333 !important; color: white !important; pointer-events: none !important; text-align: center !important; }
-    div[data-testid="stTable"] td { padding: 8px !important; border: 1px solid #444 !important; text-align: center !important; }
+    /* テーブルスタイル：クリック禁止・文字サイズ指定 */
+    .scroll-box table { width: 100% !important; font-size: 20px !important; border-collapse: collapse; table-layout: fixed; }
+    .scroll-box th { background-color: #f0f2f6 !important; color: #31333f !important; pointer-events: none !important; text-align: center !important; position: sticky; top: 0; z-index: 1; }
+    .scroll-box td { padding: 10px !important; border: 1px solid #eee !important; text-align: center !important; pointer-events: none !important; background: white; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -152,7 +153,7 @@ with all_patterns_tab:
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         
         st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-        st.markdown(pd.DataFrame(view_data).to_html(index=False, escape=False), unsafe_allow_html=True)
+        st.markdown(pd.DataFrame(view_data).to_html(index=True, escape=False), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 7. 解析結果表示 ---
@@ -187,7 +188,7 @@ if st.session_state.history and patterns:
                 st.write("### 🔍 この配列の続きを確認")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
                 detail_data = []
-                display_range = (best['lp'] - best['orig_lp']) + 20
+                display_range = (best['lp'] - best['orig_lp']) + 25
                 for i in range(display_range):
                     idx_l, idx_r = start_l + i, start_r + i
                     l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
@@ -205,7 +206,7 @@ if st.session_state.history and patterns:
                     })
                 
                 st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-                st.markdown(pd.DataFrame(detail_data).to_html(index=False, escape=False), unsafe_allow_html=True)
+                st.markdown(pd.DataFrame(detail_data).to_html(index=True, escape=False), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 st.write("### 💎 以降のレアカード一覧")
