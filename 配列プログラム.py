@@ -103,32 +103,19 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; min-height: 50px; }
     
-    div[data-testid="stNumberInput"] input {
-        background-color: #ffffff !important;
-        color: #000000 !important;
-    }
-    
-    .half-width-container { width: 50% !important; min-width: 200px; }
-    .peek-box { border: 2px solid #60b4ff; padding: 10px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 5px; }
-    
-    /* 強制横並び用レイアウト */
-    .force-row {
+    /* スマホでカラムが縦に並ぶのを防ぐための強制横並び設定 */
+    [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
-        justify-content: space-around !important;
-        gap: 10px !important;
-        width: 100% !important;
+        flex-wrap: nowrap !important;
+        align-items: flex-start !important;
     }
-    .force-col {
-        flex: 1 !important;
-        text-align: center !important;
+    [data-testid="stColumn"] {
+        min-width: 0px !important;
     }
-    .force-col img {
-        width: 100% !important;
-        max-width: 150px !important; /* 2/5程度のサイズに制限 */
-        height: auto !important;
-        border-radius: 5px;
-    }
+
+    .half-width-container { width: 50% !important; min-width: 200px; }
+    .peek-box { border: 2px solid #60b4ff; padding: 10px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -253,7 +240,7 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 👀配列のぞき見用 (CSSによる強制横並び版) ---
+# --- 8. 👀配列のぞき見用 (修正版) ---
 peek_expander = st.expander("👀配列のぞき見用")
 with peek_expander:
     if patterns:
@@ -262,27 +249,27 @@ with peek_expander:
             r_last = data["R"][-1]
             st.markdown(f'<div class="peek-box">{p_name}</div>', unsafe_allow_html=True)
             
-            # 画像パス（ローカル/GitHub対応）
-            img_l_src = f"images/{l_last}.jpg"
-            img_r_src = f"images/{r_last}.jpg"
+            # st.columnsで横並びを実現（CSSによりスマホでも強制維持）
+            c_img_l, c_img_r = st.columns(2)
+            with c_img_l:
+                path_l = f"images/{l_last}.jpg"
+                if os.path.exists(path_l):
+                    # スマホでの表示を考慮し、幅を調整
+                    st.image(path_l, use_container_width=True)
+                else:
+                    st.warning(f"No.{l_last} なし")
+                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:13px; font-weight:bold;'>左末尾: No.{l_last}</div>", unsafe_allow_html=True)
             
-            # HTMLで直接2列レイアウトを組む（Streamlitのカラムは使わない）
-            img_html = f"""
-            <div class="force-row">
-                <div class="force-col">
-                    <img src="data:image/jpeg;base64," style="display:none;" /> {"<img src='app/static/" + img_l_src + "' />" if os.path.exists(img_l_src) else "<div style='background:#333;height:100px;border-radius:5px;display:flex;align-items:center;justify-content:center;'>No Image</div>"}
-                    <div style='color:#aaa; font-size:13px; font-weight:bold; margin-top:5px;'>左末尾: No.{l_last}</div>
-                </div>
-                <div class="force-col">
-                    {"<img src='app/static/" + img_r_src + "' />" if os.path.exists(img_r_src) else "<div style='background:#333;height:100px;border-radius:5px;display:flex;align-items:center;justify-content:center;'>No Image</div>"}
-                    <div style='color:#aaa; font-size:13px; font-weight:bold; margin-top:5px;'>右末尾: No.{r_last}</div>
-                </div>
-            </div>
-            """
-            st.markdown(img_html, unsafe_allow_html=True)
+            with c_img_r:
+                path_r = f"images/{r_last}.jpg"
+                if os.path.exists(path_r):
+                    st.image(path_r, use_container_width=True)
+                else:
+                    st.warning(f"No.{r_last} なし")
+                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:13px; font-weight:bold;'>右末尾: No.{r_last}</div>", unsafe_allow_html=True)
             
-            # 出現レア欄を一段下げる
-            st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
+            # 出現レア欄を一段下げる（余白）
+            st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
             with st.expander("出現レア", expanded=False):
                 rares_found = []
                 for side_key in ["L", "R"]:
