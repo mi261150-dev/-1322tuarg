@@ -1,16 +1,17 @@
-
 import streamlit as st
 import pandas as pd
 
 # --- 1. 内部判定 & 色定義 ---
+RARE_NUMS = [1, 7, 16, 18, 26, 27, 36, 48, 55, 58, 61, 99]
+
 def get_card_display(n):
-    if n is None or n == "": return "終了"
+    if n is None or n == "" or n == "終了": return "終了"
     try:
         n = int(n)
         names = {
             1:"カタストロム", 7:"ドーン", 16:"デモンズ", 18:"ぎーつ",
             26:"クウガ", 27:"アギト", 36:"電王", 48:"ゴースト",
-            55:"ジ王", 58:"ディケイド", 61:"V3"
+            55:"ジ王", 58:"ジ王", 61:"V3"
         }
         if n in names:
             return f"{n} {names[n]}"
@@ -73,13 +74,12 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
-    div[data-testid="column"] { display: flex; align-items: flex-end; }
-    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 2px; }
-    .stNumberInput input { height: 3.2em !important; }
-    .next-num { font-size: 48px; font-weight: bold; line-height: 1.2; }
-    .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
-    .status-err { color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px; }
+    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; }
+    .next-rare-box { background: #1a1a1a; padding: 20px; border-radius: 15px; text-align: center; margin: 10px 0; border: 2px solid #FFD700; }
+    .rare-label { color: #FFD700; font-size: 14px; font-weight: bold; margin-bottom: 5px; }
+    .rare-name { font-size: 32px; font-weight: bold; line-height: 1.1; }
+    .rare-count { font-size: 20px; color: #FFFFFF; margin-top: 5px; }
+    .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 18px; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -88,14 +88,14 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
+# 入力部
 with st.container():
     c_in, c_add = st.columns([1, 1], gap="small")
-    with c_in:
-        num = st.number_input("番号入力", min_value=1, max_value=110, value=1, step=1, label_visibility="collapsed")
+    with c_in: num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
     with c_add:
         if st.button("✅ 確定"):
             st.session_state.history.append(int(num)); st.rerun()
-    c_sub_l, c_sub_r = st.columns(2, gap="small")
+    c_sub_l, c_sub_r = st.columns(2)
     with c_sub_l:
         if st.button("⬅️ 1個消す"):
             if st.session_state.history: st.session_state.history.pop(); st.rerun()
@@ -104,86 +104,78 @@ with st.container():
             st.session_state.history = []; st.rerun()
 
 if st.session_state.history:
-    hist_html = []
-    for n in st.session_state.history:
-        color, _ = get_color_and_rarity(n)
-        hist_html.append(f'<span style="color:{color}; font-weight:bold;">{n}</span>')
+    hist_html = [f'<span style="color:{get_color_and_rarity(n)[0]}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
 st.divider()
 
 # --- 5. 解析 & 表示 ---
-all_patterns_exp = st.expander("📊 配列表データ")
-with all_patterns_exp:
-    if patterns:
-        sel_p = st.selectbox("配列選択", list(patterns.keys()))
-        target_d = patterns[sel_p]
-        view_list = []
-        for i in range(max(len(target_d['L']), len(target_d['R']))):
-            l_v = target_d['L'][i] if i < len(target_d['L']) else ""
-            r_v = target_d['R'][i] if i < len(target_d['R']) else ""
-            l_txt = get_card_display(l_v)
-            r_txt = get_card_display(r_v)
-            l_disp = f"⭐ {l_txt}" if l_v in st.session_state.history else l_txt
-            r_disp = f"⭐ {r_txt}" if r_v in st.session_state.history else r_txt
-            view_list.append({"左": l_disp, "右": r_disp})
-        st.dataframe(pd.DataFrame(view_list), use_container_width=True, hide_index=True)
-
 if st.session_state.history and patterns:
     h = st.session_state.history
-    tab_res1, tab_res2 = st.tabs(["① レアあり", "② 4枚一致"])
+    # メインサーチ（レアあり優先）
+    all_hits = []
+    for name, data in patterns.items():
+        res = find_matches(h, data["L"], data["R"])
+        for ht in res: all_hits.append({**ht, "name": name})
 
-    def render_result(tab_obj, active_req, border_color):
-        with tab_obj:
-            if not active_req:
-                st.warning("枚数不足")
-                return
-            hits = []
-            for name, data in patterns.items():
-                res = find_matches(h, data["L"], data["R"])
-                for ht in res: hits.append({**ht, "name": name})
+    if all_hits:
+        best = all_hits[0]
+        d = patterns[best['name']]
+        
+        # レア検索関数
+        def get_next_rare_info(lst, start_pos):
+            for i in range(start_pos, len(lst)):
+                if lst[i] in RARE_NUMS:
+                    return {"name": get_card_display(lst[i]), "count": i - start_pos + 1, "color": get_color_and_rarity(lst[i])[0]}
+            return {"name": "不明", "count": "-", "color": "#FFFFFF"}
 
-            if hits:
-                best = hits[0]; d = patterns[best['name']]
-                nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
-                nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
-                color_l, _ = get_color_and_rarity(nl)
-                color_r, _ = get_color_and_rarity(nr)
-                
-                st.markdown(f"""
-                    <div style="border: 3px solid {border_color}; padding: 20px; border-radius: 15px; text-align: center; background: white;">
-                        <div style="color: {border_color}; font-weight: bold;">{best['name']}</div>
-                        <div style="display: flex; justify-content: space-around; margin-top: 15px;">
-                            <div><div style="color: #666;">左・次</div><div class="next-num" style="color:{color_l};">{nl}</div></div>
-                            <div style="border-left: 1px solid #ddd;"></div>
-                            <div><div style="color: #666;">右・次</div><div class="next-num" style="color:{color_r};">{nr}</div></div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
+        rare_l = get_next_rare_info(d['L'], best['lp'])
+        rare_r = get_next_rare_info(d['R'], best['rp'])
 
-                with st.expander("🔍 レアまでの枚数と続き"):
-                    # レア位置計算用関数
-                    def find_next_rare(lst, start_pos):
-                        rare_nums = [1, 7, 16, 18, 26, 27, 36, 48, 55, 58, 61, 99]
-                        for i in range(start_pos, len(lst)):
-                            if lst[i] in rare_nums:
-                                return f"{i - start_pos + 1}枚目"
-                        return "なし"
+        st.subheader(f"📍 {best['name']}")
+        
+        # 目立たせるレア表示
+        col_l, col_r = st.columns(2)
+        with col_l:
+            st.markdown(f"""<div class="next-rare-box">
+                <div class="rare-label">左シリンダー次レア</div>
+                <div class="rare-name" style="color:{rare_l['color']};">{rare_l['name']}</div>
+                <div class="rare-count">{rare_l['count']}枚目</div>
+            </div>""", unsafe_allow_html=True)
+            st.caption(f"直後の番号: {get_card_display(d['L'][best['lp']] if best['lp'] < len(d['L']) else '終了')}")
 
-                    st.write(f"**左の次レアまで**: {find_next_rare(d['L'], best['lp'])}")
-                    st.write(f"**右の次レアまで**: {find_next_rare(d['R'], best['rp'])}")
-                    st.divider()
+        with col_r:
+            st.markdown(f"""<div class="next-rare-box">
+                <div class="rare-label">右シリンダー次レア</div>
+                <div class="rare-name" style="color:{rare_r['color']};">{rare_r['name']}</div>
+                <div class="rare-count">{rare_r['count']}枚目</div>
+            </div>""", unsafe_allow_html=True)
+            st.caption(f"直後の番号: {get_card_display(d['R'][best['rp']] if best['rp'] < len(d['R']) else '終了')}")
 
-                    detail_data = []
-                    for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
-                        l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
-                        detail_data.append({
-                            "左": get_card_display(l_v), 
-                            "右": get_card_display(r_v)
-                        })
-                    st.table(detail_data)
-            else:
-                st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
+        # 続きを表示（隠さない）
+        st.write("### 📋 配列の続き")
+        detail_data = []
+        for i in range(20):
+            idx_l, idx_r = best['lp'] + i, best['rp'] + i
+            l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
+            r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
+            if l_v is None and r_v is None: break
+            detail_data.append({
+                "左": get_card_display(l_v), 
+                "右": get_card_display(r_v)
+            })
+        st.table(detail_data)
+    else:
+        st.error("❌ 一致する配列が不明です")
+else:
+    st.info("カード番号を入力してください")
 
-    render_result(tab_res1, (len(h)>=2), "#FF4B4B")
-    render_result(tab_res2, (len(h)>=4), "#1f77b4")
+# 配列表データ（全確認用）
+with st.expander("📊 全配列表の確認"):
+    if patterns:
+        sel_p = st.selectbox("配列データ選択", list(patterns.keys()))
+        t_d = patterns[sel_p]
+        st.dataframe(pd.DataFrame({
+            "左": [get_card_display(x) for x in t_d['L']],
+            "右": [get_card_display(x) for x in t_d['R']]
+        }), use_container_width=True)
