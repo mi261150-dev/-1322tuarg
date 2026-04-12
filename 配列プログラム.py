@@ -1,26 +1,18 @@
 import streamlit as st
 import pandas as pd
 
-# --- 1. 名称・判定定義（レア表記は内部判定のみに使用） ---
-def get_card_name(n):
-    if not n: return ""
+# --- 1. 内部判定 & 色定義 ---
+def get_color_and_rarity(n):
+    if not n: return "#FFFFFF", "N"
     try:
         n = int(n)
-        names = {
-            1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
-            26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
-            55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3"
-        }
-        return names.get(n, "")
-    except: return ""
-
-def is_rare_internal(n):
-    # 内部的な判定用（ロジック維持のため）
-    try:
-        n = int(n)
-        rare_nums = [1, 7, 16, 18, 26, 27, 36, 48, 55, 58, 61, 99, 98, 5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63]
-        return n in rare_nums or (64 <= n <= 77)
-    except: return False
+        # LLR: 金, LR: 赤, SR: 黄, CP: 青, その他: 白
+        if n in [7, 26, 61]: return "#FFD700", "LLR"
+        if n in [1, 16, 18, 27, 36, 48, 55, 58, 99]: return "#FF4B4B", "LR"
+        if n in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63, 98]: return "#FFFF00", "SR"
+        if 64 <= n <= 77: return "#1E90FF", "CP"
+        return "#FFFFFF", "N"
+    except: return "#FFFFFF", "N"
 
 # --- 2. データ読み込み ---
 @st.cache_data
@@ -71,8 +63,7 @@ st.markdown("""
     div[data-testid="column"] { display: flex; align-items: flex-end; }
     .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 2px; }
     .stNumberInput input { height: 3.2em !important; }
-    .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
-    .card-name { font-size: 16px; color: #d32f2f; font-weight: bold; }
+    .next-num { font-size: 48px; font-weight: bold; line-height: 1.2; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     .status-err { color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px; }
     </style>
@@ -83,53 +74,50 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# --- 入力エリア ---
 with st.container():
     c_in, c_add = st.columns([1, 1], gap="small")
     with c_in:
         num = st.number_input("番号入力", min_value=1, max_value=110, value=1, step=1, label_visibility="collapsed")
     with c_add:
-        if st.button("✅ 上の番号で確定"):
+        if st.button("✅ 確定"):
             st.session_state.history.append(int(num)); st.rerun()
-
     c_sub_l, c_sub_r = st.columns(2, gap="small")
     with c_sub_l:
         if st.button("⬅️ 1個消す"):
             if st.session_state.history: st.session_state.history.pop(); st.rerun()
     with c_sub_r:
-        if st.button("🗑️ 履歴を消す"):
+        if st.button("🗑️ 履歴クリア"):
             st.session_state.history = []; st.rerun()
 
-# 履歴表示（出たカードを光らせる）
 if st.session_state.history:
-    hist_html = [f'<span style="color:#ffff00; font-weight:bold;">{n}</span>' for n in st.session_state.history]
-    st.markdown(f'<div class="history-box">出たカード: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
+    hist_html = []
+    for n in st.session_state.history:
+        color, _ = get_color_and_rarity(n)
+        hist_html.append(f'<span style="color:{color}; font-weight:bold;">{n}</span>')
+    st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
 st.divider()
 
 # --- 5. 解析 & 表示 ---
-# 全データ確認用
-all_patterns_exp = st.expander("📊 すべての配列表データを見る")
+all_patterns_exp = st.expander("📊 配列表データ")
 with all_patterns_exp:
     if patterns:
-        sel_p = st.selectbox("表示する配列を選択", list(patterns.keys()))
+        sel_p = st.selectbox("配列選択", list(patterns.keys()))
         target_d = patterns[sel_p]
         view_list = []
         for i in range(max(len(target_d['L']), len(target_d['R']))):
             l_v = target_d['L'][i] if i < len(target_d['L']) else ""
             r_v = target_d['R'][i] if i < len(target_d['R']) else ""
-            # 出たカードを強調
             l_disp = f"⭐ {l_v}" if l_v in st.session_state.history else str(l_v)
             r_disp = f"⭐ {r_v}" if r_v in st.session_state.history else str(r_v)
-            view_list.append({"No": i+1, "左": l_disp, "左名称": get_card_name(l_v), "右": r_disp, "右名称": get_card_name(r_v)})
+            view_list.append({"左": l_disp, "右": r_disp})
         st.dataframe(pd.DataFrame(view_list), use_container_width=True, hide_index=True)
 
 if st.session_state.history and patterns:
     h = st.session_state.history
-    has_rare = any(is_rare_internal(n) for n in h)
-    tab_res1, tab_res2 = st.tabs(["① レアあり探索", "② 4枚一致探索"])
+    tab_res1, tab_res2 = st.tabs(["① レアあり", "② 4枚一致"])
 
-    def render_result(tab_obj, active_req, color):
+    def render_result(tab_obj, active_req, border_color):
         with tab_obj:
             if not active_req:
                 st.warning("枚数不足")
@@ -143,30 +131,28 @@ if st.session_state.history and patterns:
                 best = hits[0]; d = patterns[best['name']]
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
+                color_l, _ = get_color_and_rarity(nl)
+                color_r, _ = get_color_and_rarity(nr)
                 
                 st.markdown(f"""
-                    <div style="border: 3px solid {color}; padding: 20px; border-radius: 15px; text-align: center; background: white;">
-                        <div style="color: {color}; font-weight: bold;">{best['name']} 特定</div>
+                    <div style="border: 3px solid {border_color}; padding: 20px; border-radius: 15px; text-align: center; background: white;">
+                        <div style="color: {border_color}; font-weight: bold;">{best['name']}</div>
                         <div style="display: flex; justify-content: space-around; margin-top: 15px;">
-                            <div><div style="color: #666;">左・次</div><div class="next-num">{nl}</div><div class="card-name">{get_card_name(nl)}</div></div>
+                            <div><div style="color: #666;">左・次</div><div class="next-num" style="color:{color_l};">{nl}</div></div>
                             <div style="border-left: 1px solid #ddd;"></div>
-                            <div><div style="color: #666;">右・次</div><div class="next-num">{nr}</div><div class="card-name">{get_card_name(nr)}</div></div>
+                            <div><div style="color: #666;">右・次</div><div class="next-num" style="color:{color_r};">{nr}</div></div>
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
 
-                with st.expander("🔍 この配列の続きを確認"):
+                with st.expander("🔍 続きを確認"):
                     detail_data = []
                     for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
                         l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
-                        detail_data.append({
-                            "枚数先": i - best['lp'] + 1,
-                            "左": l_v, "左名称": get_card_name(l_v),
-                            "右": r_v, "右名称": get_card_name(r_v)
-                        })
+                        detail_data.append({"左": l_v, "右": r_v})
                     st.table(detail_data)
             else:
                 st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
 
-    render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
+    render_result(tab_res1, (len(h)>=2), "#FF4B4B")
     render_result(tab_res2, (len(h)>=4), "#1f77b4")
