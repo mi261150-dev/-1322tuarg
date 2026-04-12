@@ -74,14 +74,20 @@ def find_matches(history, L, R):
 
 # --- 4. 表生成関数 ---
 def render_custom_table(df_data, height=450):
+    # HTML変換
     df_html = df_data.to_html(index=False, escape=False)
-    # No.の番号（1列目）を置換対象から外すため、<td>{n}</td> の形式のみを置換
-    # これにより、履歴と一致する番号のみが黄色になり、No.列の数字はそのままになります
-    for n in st.session_state.history:
-        target = f'<td>{n}</td>'
-        replacement = f'<td><span style="color:#ffdd00; font-weight:bold;">{n}</span></td>'
-        df_html = df_html.replace(target, replacement)
     
+    # 履歴一致ハイライト
+    # 第2カラム(左)と第3カラム(右)のみを置換対象にするための正規表現
+    # No.列(第1カラム)の<td>数字</td>は無視し、それ以降の<td>数字</td>のみ置換
+    for n in st.session_state.history:
+        # <td>数字</td> のうち、行の最初ではないもの（No.列ではないもの）を狙う
+        target = rf'<td>{n}</td>'
+        replacement = f'<td><span style="color:#ffdd00; font-weight:bold;">{n}</span></td>'
+        # No.列(1列目)は <td>数字</td> の直前に <tr> や他の <td> がないので、
+        # 「直前に <td> がある <td>」のみを置換することで、No.列を避けます。
+        df_html = re.sub(rf'(<td>.*?</td>\s*){target}', rf'\1{replacement}', df_html)
+
     html_code = f"""
     <div style="height: {height}px; overflow-y: auto; border: 1px solid #555; margin-top: 5px; background: #000; border-radius: 5px;">
         <style>
@@ -125,6 +131,11 @@ st.markdown("""
     div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
     .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; font-size: 18px !important; background-color: #333 !important; color: white !important; border: 1px solid #555 !important; }
     .stButton > button:hover { border-color: #ff4b4b !important; color: #ff4b4b !important; }
+    
+    /* 早見表画像用レイアウト */
+    .img-container { display: flex; justify-content: space-around; align-items: flex-start; margin-top: 5px; }
+    .img-box { text-align: center; width: 45%; }
+    .img-box img { width: 100%; height: auto; border-radius: 5px; }
     .peek-box { border: 2px solid #60b4ff; padding: 10px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
@@ -164,7 +175,6 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 
-# --- 6. 配列表一覧表示 ---
 all_patterns_tab = st.expander("📊 配列表一覧")
 with all_patterns_tab:
     if patterns:
@@ -182,7 +192,6 @@ with all_patterns_tab:
             view_data.append({"No.": i+1, "左": get_disp(l_v), "右": get_disp(r_v)})
         render_custom_table(pd.DataFrame(view_data))
 
-# --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
@@ -255,52 +264,50 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 👀配列のぞき見用 (画像を横に2枚並べ、サイズを1/2にする修正) ---
+# --- 8. 👀配列のぞき見用 (画像横並び・縮小修正) ---
 peek_expander = st.expander("👀配列のぞき見用")
 with peek_expander:
     if patterns:
-        # enumerateを使って2つずつ処理し、横に並べる
-        p_items = list(patterns.items())
-        for i in range(0, len(p_items), 2):
-            cols = st.columns(2)  # 配列自体を横に2つ並べる
-            for j in range(2):
-                if i + j < len(p_items):
-                    p_name, data = p_items[i+j]
-                    l_last = data["L"][-1]
-                    r_last = data["R"][-1]
-                    
-                    with cols[j]:
-                        st.markdown(f'<div class="peek-box">{p_name}</div>', unsafe_allow_html=True)
-                        
-                        # 画像表示用のカラム
-                        img_col1, img_col2 = st.columns(2)
-                        with img_col1:
-                            img_path_l = f"images/{l_last}.jpg"
-                            if os.path.exists(img_path_l):
-                                # width=150 (元の約1/2想定) で表示
-                                st.image(img_path_l, width=150)
-                            st.markdown(f"<div style='text-align:center; color:#aaa; font-size:10px;'>左末尾: No.{l_last}</div>", unsafe_allow_html=True)
-                        
-                        with img_col2:
-                            img_path_r = f"images/{r_last}.jpg"
-                            if os.path.exists(img_path_r):
-                                st.image(img_path_r, width=150)
-                            st.markdown(f"<div style='text-align:center; color:#aaa; font-size:10px;'>右末尾: No.{r_last}</div>", unsafe_allow_html=True)
-                        
-                        # レア出現順のボタンは省スペースのためコンパクトに
-                        with st.expander("出現レア", expanded=False):
-                            rares_found = []
-                            for side_key in ["L", "R"]:
-                                track = data[side_key]
-                                side_label = "左" if side_key == "L" else "右"
-                                for idx, val in enumerate(track):
-                                    if is_target_rare(val):
-                                        rares_found.append({"pos": idx + 1, "name": get_rarity(val), "side": side_label})
-                            
-                            if rares_found:
-                                rares_found = sorted(rares_found, key=lambda x: x['pos'])
-                                for r in rares_found:
-                                    st.markdown(f"📍 {r['pos']} ({r['side']}): {r['name']}")
+        for p_name, data in patterns.items():
+            l_last = data["L"][-1]
+            r_last = data["R"][-1]
+            
+            st.markdown(f'<div class="peek-box">{p_name}</div>', unsafe_allow_html=True)
+            
+            # 画像を横並びにするHTML
+            img_html = '<div class="img-container">'
+            
+            # 左画像
+            path_l = f"images/{l_last}.jpg"
+            if os.path.exists(path_l):
+                # 直接バイナリを読み込んで表示するか、相対パスで表示
+                # GitHub/Streamlit環境を考慮し、st.imageの代わりにHTMLタグを使用
+                img_html += f'<div class="img-box"><img src="app/static/{path_l}" onerror="this.src=\'https://via.placeholder.com/150?text=No.{l_last}\'"><br><span style="color:#aaa; font-size:10px;">左末尾: No.{l_last}</span></div>'
+            else:
+                img_html += f'<div class="img-box"><div style="width:100%; aspect-ratio:2/3; background:#333; display:flex; align-items:center; justify-content:center; color:#555; border-radius:5px;">No image</div><br><span style="color:#aaa; font-size:10px;">左末尾: No.{l_last}</span></div>'
+            
+            # 右画像
+            path_r = f"images/{r_last}.jpg"
+            if os.path.exists(path_r):
+                img_html += f'<div class="img-box"><img src="app/static/{path_r}" onerror="this.src=\'https://via.placeholder.com/150?text=No.{r_last}\'"><br><span style="color:#aaa; font-size:10px;">右末尾: No.{r_last}</span></div>'
+            else:
+                img_html += f'<div class="img-box"><div style="width:100%; aspect-ratio:2/3; background:#333; display:flex; align-items:center; justify-content:center; color:#555; border-radius:5px;">No image</div><br><span style="color:#aaa; font-size:10px;">右末尾: No.{r_last}</span></div>'
+            
+            img_html += '</div>'
+            st.markdown(img_html, unsafe_allow_html=True)
+            
+            with st.expander("出現レア", expanded=False):
+                rares_found = []
+                for side_key in ["L", "R"]:
+                    track = data[side_key]
+                    side_label = "左" if side_key == "L" else "右"
+                    for idx, val in enumerate(track):
+                        if is_target_rare(val):
+                            rares_found.append({"pos": idx + 1, "name": get_rarity(val), "side": side_label})
+                if rares_found:
+                    rares_found = sorted(rares_found, key=lambda x: x['pos'])
+                    for r in rares_found:
+                        st.markdown(f"📍 {r['pos']} ({r['side']}): {r['name']}")
     else:
         st.info("データが読み込めていません。")
 
