@@ -99,14 +99,14 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     
-    /* ボタンエリアの幅を半分に制限して中央寄せ */
+    /* ボタンエリアの幅と並び設定 */
     div[data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         gap: 0.5rem !important;
-        width: 50% !important; /* 横幅を半分に */
-        min-width: 200px !important; /* 小さくなりすぎ防止 */
+        width: 50% !important;
+        min-width: 200px !important;
     }
     [data-testid="column"] {
         flex: 1 1 0% !important;
@@ -133,13 +133,15 @@ if st.session_state.history:
 # --- 番号入力 ---
 st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
 
-# --- ボタン列 (横幅を絞った 確定・消す) ---
+# --- ボタン列 ---
 c1, c2 = st.columns(2)
 with c1:
     if st.button("確定", use_container_width=True):
         input_val = st.session_state.get("num_in")
         if input_val is not None:
             st.session_state.history.append(int(input_val))
+            # 入力値をクリア
+            st.session_state["num_in"] = None
             st.rerun()
 with c2:
     if st.button("消す", use_container_width=True):
