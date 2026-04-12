@@ -94,23 +94,15 @@ def render_custom_table(df_data, height=450):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
-# スタイル適用（隠しボタンの処理を改善）
 st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     
-    /* 隠しボタンを「透明で見えないが、存在はする」状態にして反応を確保 */
-    .stButton > button {
-        opacity: 0 !important;
-        width: 1px !important;
-        height: 1px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        position: absolute !important;
-        pointer-events: none !important;
-        z-index: -1;
-    }
+    /* 横並びCSS */
+    [data-testid="column"] { flex: 1 1 0% !important; min-width: 0px !important; }
+    div[data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; gap: 0.5rem !important; }
+    .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; padding: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -124,45 +116,27 @@ if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
-# --- 番号入力 ---
-num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
+# --- 番号入力 (キーを固定) ---
+val = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
 
-# --- 物理的横並びボタンコンポーネント ---
-btn_component_html = """
-<div style="display: flex; gap: 8px; width: 100%;">
-    <button id="add" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">確定</button>
-    <button id="back" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">消す</button>
-    <button id="clear" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">消去</button>
-</div>
-
-<script>
-    const trigger = (text) => {
-        const btns = window.parent.document.querySelectorAll('button');
-        for (const b of btns) {
-            if (b.innerText === text) {
-                b.click();
-                break;
-            }
-        }
-    };
-    document.getElementById('add').onclick = () => trigger('EXEC_ADD');
-    document.getElementById('back').onclick = () => trigger('EXEC_BACK');
-    document.getElementById('clear').onclick = () => trigger('EXEC_CLEAR');
-</script>
-"""
-st.components.v1.html(btn_component_html, height=60)
-
-# --- 隠しボタンの実体 ---
-if st.button("EXEC_ADD"):
-    if st.session_state.num_in is not None:
-        st.session_state.history.append(int(st.session_state.num_in))
-    st.rerun()
-if st.button("EXEC_BACK"):
-    if st.session_state.history: st.session_state.history.pop()
-    st.rerun()
-if st.button("EXEC_CLEAR"):
-    st.session_state.history = []
-    st.rerun()
+# --- ボタン列 ---
+c1, c2, c3 = st.columns(3)
+with c1:
+    if st.button("確定", use_container_width=True):
+        # セッション状態から直接値を取得して判定
+        input_val = st.session_state.get("num_in")
+        if input_val is not None:
+            st.session_state.history.append(int(input_val))
+            st.rerun()
+with c2:
+    if st.button("消す", use_container_width=True):
+        if st.session_state.history:
+            st.session_state.history.pop()
+            st.rerun()
+with c3:
+    if st.button("消去", use_container_width=True):
+        st.session_state.history = []
+        st.rerun()
 
 st.divider()
 
