@@ -1,16 +1,16 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 
-# --- 1. 名称・色・判定定義 ---
+# --- 1. 内部判定 & 色定義 ---
 def get_card_display(n):
-    if n is None or n == "" or (isinstance(n, float) and np.isnan(n)): return ""
+    if not n: return ""
     try:
-        n = int(float(n))
+        n = int(n)
+        # レアカードのみ名前を定義
         names = {
-            1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
-            26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
-            55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3"
+            1:"カタストロム", 7:"ドーン", 16:"デモンズ", 18:"ぎーつ",
+            26:"クウガ", 27:"アギト", 36:"電王", 48:"ゴースト",
+            55:"ジ王", 58:"ディケイド", 61:"V3"
         }
         if n in names:
             return f"{n} {names[n]}"
@@ -18,35 +18,32 @@ def get_card_display(n):
     except: return str(n)
 
 def get_color_and_rarity(n):
-    if n is None or n == "" or (isinstance(n, float) and np.isnan(n)): return "#FFFFFF"
+    if not n: return "#FFFFFF", "N"
     try:
-        n = int(float(n))
-        if n in [7, 26, 61]: return "#FFD700" # LLR
-        if n in [1, 16, 18, 27, 36, 48, 55, 58, 99]: return "#FF4B4B" # LR
-        if n in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63, 98]: return "#FFFF00" # SR
-        if 64 <= n <= 77: return "#1E90FF" # CP
-        return "#FFFFFF"
-    except: return "#FFFFFF"
+        n = int(n)
+        # LLR: 金, LR: 赤, SR: 黄, CP: 青, その他: 白
+        if n in [7, 26, 61]: return "#FFD700", "LLR"
+        if n in [1, 16, 18, 27, 36, 48, 55, 58, 99]: return "#FF4B4B", "LR"
+        if n in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63, 98]: return "#FFFF00", "SR"
+        if 64 <= n <= 77: return "#1E90FF", "CP"
+        return "#FFFFFF", "N"
+    except: return "#FFFFFF", "N"
 
-# --- 2. データ読み込み（修正：空セル対策強化） ---
+# --- 2. データ読み込み ---
 @st.cache_data
 def load_data():
     try:
-        # csvを文字列として読み込み、欠損値を確実に処理
-        df = pd.read_csv("配列.csv", header=None).replace({np.nan: None})
+        df = pd.read_csv("配列.csv", header=None)
         patterns = {}
-        # 2列ペアで回す
-        for i in range(0, df.shape[1] - 1, 2):
-            # 数値に変換できるものだけ抽出し、リスト化
-            l_col = pd.to_numeric(df.iloc[1:, i], errors='coerce').dropna().astype(int).tolist()
-            r_col = pd.to_numeric(df.iloc[1:, i+1], errors='coerce').dropna().astype(int).tolist()
-            
-            if len(l_col) > 0 or len(r_col) > 0:
-                patterns[f"配列 {i//2 + 1}"] = {"L": l_col, "R": r_col}
+        valid_cols = [c for c in range(len(df.columns)) if pd.to_numeric(df.iloc[1:, c], errors='coerce').dropna().count() > 3]
+        for i in range(0, len(valid_cols) - 1, 2):
+            l_idx, r_idx = valid_cols[i], valid_cols[i+1]
+            patterns[f"配列 {i//2 + 1}"] = {
+                "L": pd.to_numeric(df.iloc[1:, l_idx], errors='coerce').dropna().astype(int).tolist(),
+                "R": pd.to_numeric(df.iloc[1:, r_idx], errors='coerce').dropna().astype(int).tolist()
+            }
         return patterns
-    except Exception as e:
-        st.error(f"読み込み失敗: {e}")
-        return {}
+    except: return {}
 
 # --- 3. 探索エンジン ---
 def find_matches(history, L, R):
@@ -57,7 +54,7 @@ def find_matches(history, L, R):
         main, sub = (L, R) if side == "L" else (R, L)
         for p in range(len(main)):
             if history[0] == main[p]:
-                for start_s in range(max(0, p-20), min(len(sub), p+20)):
+                for start_s in range(max(0, p-12), min(len(sub), p+13)):
                     curr_m, curr_s = p + 1, start_s
                     possible = True
                     for i in range(1, h_len):
@@ -69,10 +66,7 @@ def find_matches(history, L, R):
                             possible = False
                             break
                     if possible:
-                        results.append({
-                            "lp": curr_m if side=="L" else curr_s,
-                            "rp": curr_s if side=="L" else curr_m
-                        })
+                        results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
     return results
 
 # --- 4. UI設定 ---
@@ -84,7 +78,7 @@ st.markdown("""
     div[data-testid="column"] { display: flex; align-items: flex-end; }
     .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 2px; }
     .stNumberInput input { height: 3.2em !important; }
-    .next-num { font-size: 48px; font-weight: bold; line-height: 1.2; min-height: 60px; }
+    .next-num { font-size: 48px; font-weight: bold; line-height: 1.2; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     .status-err { color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px; }
     </style>
@@ -111,7 +105,10 @@ with st.container():
             st.session_state.history = []; st.rerun()
 
 if st.session_state.history:
-    hist_html = [f'<span style="color:{get_color_and_rarity(n)}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
+    hist_html = []
+    for n in st.session_state.history:
+        color, _ = get_color_and_rarity(n)
+        hist_html.append(f'<span style="color:{color}; font-weight:bold;">{n}</span>')
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
 st.divider()
@@ -124,10 +121,13 @@ with all_patterns_exp:
         target_d = patterns[sel_p]
         view_list = []
         for i in range(max(len(target_d['L']), len(target_d['R']))):
-            l_v = target_d['L'][i] if i < len(target_d['L']) else None
-            r_v = target_d['R'][i] if i < len(target_d['R']) else None
+            l_v = target_d['L'][i] if i < len(target_d['L']) else ""
+            r_v = target_d['R'][i] if i < len(target_d['R']) else ""
+            
+            # レアのみ名前を付与
             l_txt = get_card_display(l_v)
             r_txt = get_card_display(r_v)
+            
             l_disp = f"⭐ {l_txt}" if l_v in st.session_state.history else l_txt
             r_disp = f"⭐ {r_txt}" if r_v in st.session_state.history else r_txt
             view_list.append({"左": l_disp, "右": r_disp})
@@ -144,39 +144,39 @@ if st.session_state.history and patterns:
                 return
             hits = []
             for name, data in patterns.items():
-                res_list = find_matches(h, data["L"], data["R"])
-                for ht in res_list: hits.append({**ht, "name": name})
+                res = find_matches(h, data["L"], data["R"])
+                for ht in res: hits.append({**ht, "name": name})
 
             if hits:
                 best = hits[0]; d = patterns[best['name']]
-                # データがあるか厳密にチェック
-                val_l = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
-                val_r = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
+                nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
+                nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
+                color_l, _ = get_color_and_rarity(nl)
+                color_r, _ = get_color_and_rarity(nr)
                 
                 st.markdown(f"""
                     <div style="border: 3px solid {border_color}; padding: 20px; border-radius: 15px; text-align: center; background: white;">
                         <div style="color: {border_color}; font-weight: bold;">{best['name']}</div>
                         <div style="display: flex; justify-content: space-around; margin-top: 15px;">
-                            <div><div style="color: #666;">左・次</div><div class="next-num" style="color:{get_color_and_rarity(val_l)};">{val_l}</div></div>
+                            <div><div style="color: #666;">左・次</div><div class="next-num" style="color:{color_l};">{nl}</div></div>
                             <div style="border-left: 1px solid #ddd;"></div>
-                            <div><div style="color: #666;">右・次</div><div class="next-num" style="color:{get_color_and_rarity(val_r)};">{val_r}</div></div>
+                            <div><div style="color: #666;">右・次</div><div class="next-num" style="color:{color_r};">{nr}</div></div>
                         </div>
                     </div>
                 """, unsafe_allow_html=True)
 
                 with st.expander("🔍 続きを確認"):
                     detail_data = []
-                    for i in range(20):
-                        idx_l, idx_r = best['lp'] + i, best['rp'] + i
-                        l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
-                        r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
-                        if l_v is None and r_v is None: break
+                    for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
+                        l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
+                        # テーブル内でもレアのみ名前を表示
                         detail_data.append({
-                            "左": get_card_display(l_v) if l_v is not None else "終了",
-                            "右": get_card_display(r_v) if r_v is not None else "終了"
+                            "左": get_card_display(l_v), 
+                            "右": get_card_display(r_v)
                         })
                     st.table(detail_data)
             else:
                 st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
-else:
-    st.info("番号を入力してください")
+
+    render_result(tab_res1, (len(h)>=2), "#FF4B4B")
+    render_result(tab_res2, (len(h)>=4), "#1f77b4")
