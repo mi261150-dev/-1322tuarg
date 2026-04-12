@@ -97,17 +97,13 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
-    .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; }
+    .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
     
-    /* 隠しボタンを完全に不可視化 */
-    div.stButton > button[style*="display: none"] { display: none !important; }
-    .hidden-btn {
-        position: fixed !important;
-        left: -100vw !important;
-        top: -100vh !important;
-        visibility: hidden !important;
-    }
+    /* ボタンを横並びに強制 */
+    div[data-testid="column"] { display: flex !important; flex-direction: row !important; gap: 5px !important; width: 100% !important; }
+    div[data-testid="column"] > div { width: 33.3% !important; flex: 1 1 auto !important; }
+    .stButton > button { width: 100% !important; height: 3.5em; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -116,49 +112,35 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 番号入力 (value=Noneにすることで、確定後に空欄に戻るように設定)
-num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", key="num_in", label_visibility="collapsed")
-
-# --- 物理的横並びボタン（HTML/JS） ---
-btn_html = """
-<div style="display: flex; flex-direction: row; gap: 8px; width: 100%;">
-    <button id="add" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">✅確定</button>
-    <button id="back" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">⬅️1消す</button>
-    <button id="clear" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">🗑️消去</button>
-</div>
-<script>
-    const send = (val) => {
-        const doc = window.parent.document;
-        const buttons = Array.from(doc.querySelectorAll('button'));
-        const target = buttons.find(b => b.innerText === val);
-        if (target) target.click();
-    };
-    document.getElementById('add').onclick = () => send("HIDDEN_ADD");
-    document.getElementById('back').onclick = () => send("HIDDEN_BACK");
-    document.getElementById('clear').onclick = () => send("HIDDEN_CLEAR");
-</script>
-"""
-st.components.v1.html(btn_html, height=60)
-
-# 隠しボタン
-st.markdown('<div class="hidden-btn">', unsafe_allow_html=True)
-if st.button("HIDDEN_ADD"):
-    if st.session_state.num_in is not None:
-        st.session_state.history.append(int(st.session_state.num_in))
-        # number_inputのkeyを更新してリセットを強制する
-        st.session_state.num_in = None
-    st.rerun()
-if st.button("HIDDEN_BACK"):
-    if st.session_state.history: st.session_state.history.pop()
-    st.rerun()
-if st.button("HIDDEN_CLEAR"):
-    st.session_state.history = []
-    st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
+# --- 履歴を検索バーの真上に移動 ---
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
+
+# --- 入力・ボタンセクション ---
+# フォーム化することで、入力確定とリセットを綺麗に処理
+with st.form(key='input_form', clear_on_submit=True):
+    num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", label_visibility="collapsed")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        submit = st.form_submit_button("✅確定")
+    with col2:
+        back = st.form_submit_button("⬅️1消す")
+    with col3:
+        clear = st.form_submit_button("🗑️消去")
+
+# ロジック処理
+if submit and num is not None:
+    st.session_state.history.append(int(num))
+    st.rerun()
+elif back:
+    if st.session_state.history:
+        st.session_state.history.pop()
+    st.rerun()
+elif clear:
+    st.session_state.history = []
+    st.rerun()
 
 st.divider()
 
