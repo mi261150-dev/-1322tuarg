@@ -132,19 +132,28 @@ with all_patterns_tab:
             l_rare_name = get_rarity(l_v)
             r_rare_name = get_rarity(r_v)
             
-            # 指定されたレアリティ（LLR, LR, パラレル）なら名前を、それ以外は番号を出す
+            # 履歴にある番号を赤くする処理
             def get_col_display(v, rare_name):
                 if not v: return ""
-                if "LR" in rare_name or "LLR" in rare_name:
-                    return f"🌟 {rare_name}"
-                return f"⭐ {v}" if v in st.session_state.history else str(v)
+                
+                # 表示テキストの決定（レアなら名称、それ以外は番号）
+                display_text = f"🌟 {rare_name}" if ("LR" in rare_name or "LLR" in rare_name) else str(v)
+                
+                # 履歴に含まれる場合は赤色にする
+                if v in st.session_state.history:
+                    return f'<span style="color: red; font-weight: bold;">{display_text}</span>'
+                return display_text
 
             view_data.append({
                 "左": get_col_display(l_v, l_rare_name),
                 "右": get_col_display(r_v, r_rare_name)
             })
-        # No列とレア度列を削除したDataFrameを表示
-        st.dataframe(pd.DataFrame(view_data), use_container_width=True, hide_index=True)
+        
+        # HTMLを表示できるように unsafe_allow_html を使って表示（DataFrameだとタグがそのまま出るため）
+        # ただしDataFrameのままで色を付けたい場合はst.dataframeのcolumn_configやstyleを使いますが、
+        # 今回のロジック維持のため、最もシンプルなMarkdownテーブル形式に変換します。
+        df_html = pd.DataFrame(view_data).to_html(escape=False, index=False)
+        st.write(df_html, unsafe_allow_html=True)
 
 if st.session_state.history and patterns:
     h = st.session_state.history
@@ -182,12 +191,17 @@ if st.session_state.history and patterns:
                     for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
                         l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
                         l_r = get_rarity(l_v); r_r = get_rarity(r_v)
+                        
+                        # 検索結果の表でも、履歴にある番号を赤く表示
+                        l_disp = f'<span style="color:red;">{l_v}</span>' if l_v in st.session_state.history else str(l_v)
+                        r_disp = f'<span style="color:red;">{r_v}</span>' if r_v in st.session_state.history else str(r_v)
+                        
                         detail_data.append({
                             "枚数先": i - best['lp'] + 1,
-                            "左": l_v, "左レア度": f"🌟 {l_r}" if is_rare(l_v) else l_r,
-                            "右": r_v, "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
+                            "左": l_disp, "左レア度": f"🌟 {l_r}" if is_rare(l_v) else l_r,
+                            "右": r_disp, "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
                         })
-                    st.table(detail_data)
+                    st.write(pd.DataFrame(detail_data).to_html(escape=False, index=False), unsafe_allow_html=True)
             else:
                 st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
 
