@@ -98,12 +98,27 @@ st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
-    [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
     
-    /* ボタンを横並びに強制 */
-    div[data-testid="column"] { display: flex !important; flex-direction: row !important; gap: 5px !important; width: 100% !important; }
-    div[data-testid="column"] > div { width: 33.3% !important; flex: 1 1 auto !important; }
-    .stButton > button { width: 100% !important; height: 3.5em; font-weight: bold; }
+    /* 隠しボタンを完全に消去 */
+    div.stButton > button { position: fixed !important; left: -2000vw !important; }
+    
+    /* ボタン横並びを絶対維持するスタイル */
+    .btn-container {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 8px !important;
+        width: 100% !important;
+    }
+    .btn-container button {
+        flex: 1 !important;
+        height: 50px !important;
+        font-weight: bold !important;
+        background: #f0f2f6 !important;
+        border: 1px solid #ccc !important;
+        border-radius: 4px !important;
+        cursor: pointer !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -112,33 +127,40 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# --- 履歴を検索バーの真上に移動 ---
+# --- 履歴 (検索バーの真上) ---
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
-# --- 入力・ボタンセクション ---
-# フォーム化することで、入力確定とリセットを綺麗に処理
-with st.form(key='input_form', clear_on_submit=True):
-    num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", label_visibility="collapsed")
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        submit = st.form_submit_button("✅確定")
-    with col2:
-        back = st.form_submit_button("⬅️1消す")
-    with col3:
-        clear = st.form_submit_button("🗑️消去")
+# --- 番号入力 ---
+num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
 
-# ロジック処理
-if submit and num is not None:
-    st.session_state.history.append(int(num))
+# --- HTML/JS による強制横並びボタン ---
+st.markdown(f"""
+<div class="btn-container">
+    <button onclick="parent.sendBtn('EXEC_ADD')">確定</button>
+    <button onclick="parent.sendBtn('EXEC_BACK')">消す</button>
+    <button onclick="parent.sendBtn('EXEC_CLEAR')">消去</button>
+</div>
+<script>
+    window.parent.sendBtn = (label) => {{
+        const doc = window.parent.document;
+        const buttons = Array.from(doc.querySelectorAll('button'));
+        const target = buttons.find(b => b.innerText === label);
+        if (target) target.click();
+    }};
+</script>
+""", unsafe_allow_html=True)
+
+# 隠しボタン
+if st.button("EXEC_ADD"):
+    if st.session_state.num_in is not None:
+        st.session_state.history.append(int(st.session_state.num_in))
     st.rerun()
-elif back:
-    if st.session_state.history:
-        st.session_state.history.pop()
+if st.button("EXEC_BACK"):
+    if st.session_state.history: st.session_state.history.pop()
     st.rerun()
-elif clear:
+if st.button("EXEC_CLEAR"):
     st.session_state.history = []
     st.rerun()
 
@@ -184,7 +206,6 @@ if st.session_state.history and patterns:
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
                 
-                # レア予測（近い順）
                 future_rares = []
                 for side in ["L", "R"]:
                     curr_pos = best['lp'] if side == "L" else best['rp']
@@ -214,7 +235,6 @@ if st.session_state.history and patterns:
 
                 st.write("### 🔍 配列の続き")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
-                
                 rare_indices_l = [i for i, v in enumerate(d['L']) if is_rare(v)]
                 rare_indices_r = [i for i, v in enumerate(d['R']) if is_rare(v)]
                 max_pos_l = max(rare_indices_l) if rare_indices_l else best['lp']
