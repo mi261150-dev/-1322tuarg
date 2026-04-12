@@ -1,12 +1,12 @@
+
 import streamlit as st
 import pandas as pd
 
 # --- 1. 内部判定 & 色定義 ---
 def get_card_display(n):
-    if not n: return ""
+    if n is None or n == "": return "終了"
     try:
         n = int(n)
-        # レアカードのみ名前を定義
         names = {
             1:"カタストロム", 7:"ドーン", 16:"デモンズ", 18:"ぎーつ",
             26:"クウガ", 27:"アギト", 36:"電王", 48:"ゴースト",
@@ -18,10 +18,9 @@ def get_card_display(n):
     except: return str(n)
 
 def get_color_and_rarity(n):
-    if not n: return "#FFFFFF", "N"
+    if n is None or n == "" or n == "終了": return "#FFFFFF", "N"
     try:
         n = int(n)
-        # LLR: 金, LR: 赤, SR: 黄, CP: 青, その他: 白
         if n in [7, 26, 61]: return "#FFD700", "LLR"
         if n in [1, 16, 18, 27, 36, 48, 55, 58, 99]: return "#FF4B4B", "LR"
         if n in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63, 98]: return "#FFFF00", "SR"
@@ -123,11 +122,8 @@ with all_patterns_exp:
         for i in range(max(len(target_d['L']), len(target_d['R']))):
             l_v = target_d['L'][i] if i < len(target_d['L']) else ""
             r_v = target_d['R'][i] if i < len(target_d['R']) else ""
-            
-            # レアのみ名前を付与
             l_txt = get_card_display(l_v)
             r_txt = get_card_display(r_v)
-            
             l_disp = f"⭐ {l_txt}" if l_v in st.session_state.history else l_txt
             r_disp = f"⭐ {r_txt}" if r_v in st.session_state.history else r_txt
             view_list.append({"左": l_disp, "右": r_disp})
@@ -165,11 +161,22 @@ if st.session_state.history and patterns:
                     </div>
                 """, unsafe_allow_html=True)
 
-                with st.expander("🔍 続きを確認"):
+                with st.expander("🔍 レアまでの枚数と続き"):
+                    # レア位置計算用関数
+                    def find_next_rare(lst, start_pos):
+                        rare_nums = [1, 7, 16, 18, 26, 27, 36, 48, 55, 58, 61, 99]
+                        for i in range(start_pos, len(lst)):
+                            if lst[i] in rare_nums:
+                                return f"{i - start_pos + 1}枚目"
+                        return "なし"
+
+                    st.write(f"**左の次レアまで**: {find_next_rare(d['L'], best['lp'])}")
+                    st.write(f"**右の次レアまで**: {find_next_rare(d['R'], best['rp'])}")
+                    st.divider()
+
                     detail_data = []
                     for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
                         l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
-                        # テーブル内でもレアのみ名前を表示
                         detail_data.append({
                             "左": get_card_display(l_v), 
                             "右": get_card_display(r_v)
