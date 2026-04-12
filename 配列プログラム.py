@@ -1,157 +1,203 @@
-
 import streamlit as st
 import pandas as pd
-import numpy as np
 
-# --- 1. 設定・色・カード名の定義 ---
-RARE_NUMS = [1, 7, 16, 18, 26, 27, 36, 48, 55, 58, 61, 99]
-
-def get_card_display(n):
-    if n is None or n == "" or str(n) == "nan": return "終了"
+# --- 1. レアリティ・名称定義 ---
+def get_rarity(n):
+    if not n: return ""
     try:
-        n_int = int(float(n))
+        n = int(n)
         names = {
-            1:"カタストロム(LR)", 7:"ドーン(LLR)", 16:"デモンズ(LR)", 18:"ギーツ(LR)",
-            26:"クウガ(LLR)", 27:"アギト(LR)", 36:"電王(LR)", 48:"ゴースト(LR)",
-            55:"ジオウ(LR)", 58:"ディケイド(LR)", 61:"V3(LLR)"
+            1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
+            26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
+            55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3"
         }
-        return f"{n_int} {names[n_int]}" if n_int in names else str(n_int)
-    except: return "不明"
+        if n in names: return names[n]
 
-def get_color(n):
-    try:
-        n_int = int(float(n))
-        if n_int in [7, 26, 61]: return "#FFD700"  # LLR
-        if n_int in [1, 16, 18, 27, 36, 48, 55, 58, 99]: return "#FF4B4B"  # LR
-        if n_int in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63, 98]: return "#FFFF00"  # SR
-        if 64 <= n_int <= 77: return "#1E90FF"  # CP
-    except: pass
-    return "#FFFFFF"
+        rarities = {
+            99:"ランダムLR", 98:"ランダムSR",
+            5:"SR", 20:"SR", 24:"SR", 25:"SR", 31:"SR", 33:"SR", 38:"SR", 40:"SR", 42:"SR", 46:"SR", 52:"SR", 63:"SR"
+        }
+        if n in rarities: return rarities[n]
+        return "CP" if 64 <= n <= 77 else "N"
+    except: return ""
 
-# --- 2. CSVデータ読み込み (6配列 = 12列) ---
+def is_rare(n):
+    r = get_rarity(n)
+    return any(x in r for x in ["LR", "LLR", "SR", "CP"])
+
+# --- 2. データ読み込み ---
 @st.cache_data
-def load_csv_data():
+def load_data():
     try:
-        # header=Noneで読み込み、全ての行をデータとして扱う
         df = pd.read_csv("配列.csv", header=None)
         patterns = {}
-        # 最大6ペア(12列)をループ
-        for i in range(6):
-            l_idx, r_idx = i * 2, i * 2 + 1
-            if l_idx < df.shape[1]:
-                l_list = pd.to_numeric(df.iloc[:, l_idx], errors='coerce').dropna().astype(int).tolist()
-                r_list = pd.to_numeric(df.iloc[:, r_idx], errors='coerce').dropna().astype(int).tolist() if r_idx < df.shape[1] else []
-                if l_list or r_list:
-                    patterns[f"配列 {i+1}"] = {"L": l_list, "R": r_list}
+        valid_cols = [c for c in range(len(df.columns)) if pd.to_numeric(df.iloc[1:, c], errors='coerce').dropna().count() > 3]
+        for i in range(0, len(valid_cols) - 1, 2):
+            l_idx, r_idx = valid_cols[i], valid_cols[i+1]
+            patterns[f"配列 {i//2 + 1}"] = {
+                "L": pd.to_numeric(df.iloc[1:, l_idx], errors='coerce').dropna().astype(int).tolist(),
+                "R": pd.to_numeric(df.iloc[1:, r_idx], errors='coerce').dropna().astype(int).tolist()
+            }
         return patterns
-    except:
-        st.error("配列.csvが見つからないか、形式が正しくありません。")
-        return {}
+    except: return {}
 
-# --- 3. 検索エンジン (跨ぎなし・シリンダー独立) ---
+# --- 3. 探索エンジン ---
 def find_matches(history, L, R):
     if not history: return []
-    results = []
     h_len = len(history)
-    # 左、右それぞれで連続一致をチェック
-    for side_name, side_list in [("L", L), ("R", R)]:
-        for p in range(len(side_list) - h_len + 1):
-            if side_list[p : p + h_len] == history:
-                results.append({
-                    "lp": p + h_len if side_name == "L" else 0,
-                    "rp": p + h_len if side_name == "R" else 0,
-                    "side": side_name
-                })
+    results = []
+    for side in ["L", "R"]:
+        main, sub = (L, R) if side == "L" else (R, L)
+        for p in range(len(main)):
+            if history[0] == main[p]:
+                for start_s in range(max(0, p-12), min(len(sub), p+13)):
+                    curr_m, curr_s = p + 1, start_s
+                    possible = True
+                    for i in range(1, h_len):
+                        if curr_m < len(main) and history[i] == main[curr_m]:
+                            curr_m += 1
+                        elif curr_s < len(sub) and history[i] == sub[curr_s]:
+                            curr_s += 1
+                        else:
+                            possible = False
+                            break
+                    if possible:
+                        results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
     return results
 
 # --- 4. UI設定 ---
-st.set_page_config(page_title="VR-1弾 配列サーチ", layout="centered")
+st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
+
 st.markdown("""
     <style>
-    .stButton > button { width: 100%; font-weight: bold; height: 3em; }
-    .rare-card { background: #1a1a1a; padding: 20px; border-radius: 15px; text-align: center; border: 2px solid #FFD700; margin-bottom: 10px; }
-    .rare-title { color: #FFD700; font-size: 0.9em; font-weight: bold; }
-    .rare-name { font-size: 2em; font-weight: bold; margin: 5px 0; }
-    .rare-dist { font-size: 1.2em; color: white; }
-    .hist-box { background: #262730; padding: 10px; border-radius: 8px; border-left: 5px solid #ff4b4b; margin-bottom: 15px; }
+    [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
+    div[data-testid="column"] { display: flex; align-items: flex-end; }
+    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 2px; }
+    .stNumberInput input { height: 3.2em !important; }
+    .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
+    .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
+    .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
+    .rare-card { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 10px; margin-top: 10px; }
+    .status-err { color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px; }
+    /* レアカード強調表示 */
+    .rare-highlight { color: #ff4b4b !important; font-weight: bold !important; }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("VR-1弾 配列サーチ")
-if 'history' not in st.session_state: st.session_state.history = []
-patterns = load_csv_data()
+st.title("VR-1弾配列サーチ")
 
-# 入力
+if 'history' not in st.session_state: st.session_state.history = []
+patterns = load_data()
+
+# --- 入力エリア ---
 with st.container():
-    c1, c2 = st.columns([1, 1])
-    with c1: num = st.number_input("番号", 1, 110, 1, label_visibility="collapsed")
-    with c2: 
-        if st.button("✅ 確定"):
+    c_in, c_add = st.columns([1, 1], gap="small")
+    with c_in:
+        num = st.number_input("番号入力", min_value=1, max_value=110, value=1, step=1, label_visibility="collapsed")
+    with c_add:
+        if st.button("✅ 上の番号で確定"):
             st.session_state.history.append(int(num)); st.rerun()
-    c3, c4 = st.columns(2)
-    with c3:
-        if st.button("⬅️ 1つ消す"):
+
+    c_sub_l, c_sub_r = st.columns(2, gap="small")
+    with c_sub_l:
+        if st.button("⬅️ 1個消す"):
             if st.session_state.history: st.session_state.history.pop(); st.rerun()
-    with c4:
-        if st.button("🗑️ クリア"):
+    with c_sub_r:
+        if st.button("🗑️ 履歴を消す"):
             st.session_state.history = []; st.rerun()
 
+# 入力済み履歴の表示（常に表示＆光らせる）
 if st.session_state.history:
-    tags = [f'<span style="color:{get_color(n)};">{n}</span>' for n in st.session_state.history]
-    st.markdown(f'<div class="hist-box">履歴: {" > ".join(tags)}</div>', unsafe_allow_html=True)
+    hist_html = []
+    for n in st.session_state.history:
+        if is_rare(n):
+            hist_html.append(f'<span style="color:#ffff00; font-weight:bold;">{n}</span>')
+        else:
+            hist_html.append(str(n))
+    st.markdown(f'<div class="history-box">出たカード: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
 st.divider()
 
-# --- 5. 結果表示 ---
+# --- 5. 解析 & 表示 ---
+all_patterns_tab = st.expander("📊 すべての配列表データを見る")
+with all_patterns_tab:
+    if patterns:
+        p_names = list(patterns.keys())
+        sel_p = st.selectbox("表示する配列を選択", p_names)
+        target_d = patterns[sel_p]
+        
+        view_data = []
+        for i in range(max(len(target_d['L']), len(target_d['R']))):
+            l_v = target_d['L'][i] if i < len(target_d['L']) else ""
+            r_v = target_d['R'][i] if i < len(target_d['R']) else ""
+            
+            l_rare = get_rarity(l_v)
+            r_rare = get_rarity(r_v)
+            
+            # 履歴にあるカードは ⭐ をつける
+            l_disp = f"⭐ {l_v}" if l_v in st.session_state.history else str(l_v)
+            r_disp = f"⭐ {r_v}" if r_v in st.session_state.history else str(r_v)
+            
+            # レアカードのみ ⭐ をつけて強調
+            l_rare_disp = f"🌟 {l_rare}" if is_rare(l_v) else l_rare
+            r_rare_disp = f"🌟 {r_rare}" if is_rare(r_v) else r_rare
+            
+            view_data.append({
+                "No": i + 1,
+                "左": l_disp, "左レア度": l_rare_disp,
+                "右": r_disp, "右レア度": r_rare_disp
+            })
+        st.dataframe(pd.DataFrame(view_data), use_container_width=True, hide_index=True)
+
 if st.session_state.history and patterns:
     h = st.session_state.history
-    found = False
-    for name, data in patterns.items():
-        hits = find_matches(h, data["L"], data["R"])
-        if hits:
-            found = True
-            hit = hits[0]
-            st.subheader(f"📍 {name} ({'左' if hit['side'] == 'L' else '右'}一致)")
-            
-            def get_rare(lst, pos):
-                for i in range(pos, len(lst)):
-                    if lst[i] in RARE_NUMS:
-                        return {"name": get_card_display(lst[i]), "dist": i-pos+1, "color": get_color(lst[i])}
-                return {"name": "不明", "dist": "-", "color": "white"}
+    has_rare = any(is_rare(n) for n in h)
+    tab_res1, tab_res2 = st.tabs(["① レアあり探索", "② 4枚一致探索"])
 
-            # 表示位置の決定
-            pos_l = hit['lp'] if hit['side'] == "L" else 0
-            pos_r = hit['rp'] if hit['side'] == "R" else 0
-            r_l, r_r = get_rare(data["L"], pos_l), get_rare(data["R"], pos_r)
+    def render_result(tab_obj, active_req, color):
+        with tab_obj:
+            if not active_req:
+                st.warning("枚数不足")
+                return
+            hits = []
+            for name, data in patterns.items():
+                res = find_matches(h, data["L"], data["R"])
+                for ht in res: hits.append({**ht, "name": name})
 
-            col1, col2 = st.columns(2)
-            for c, side, res in zip([col1, col2], ["左", "右"], [r_l, r_r]):
-                with c:
-                    st.markdown(f"""<div class="rare-card">
-                        <div class="rare-title">{side}シリンダー次レア</div>
-                        <div class="rare-name" style="color:{res['color']};">{res['name']}</div>
-                        <div class="rare-dist">{res['dist']} 枚目</div>
-                    </div>""", unsafe_allow_html=True)
+            if hits:
+                best = hits[0]; d = patterns[best['name']]
+                nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
+                nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
+                
+                st.markdown(f"""
+                    <div style="border: 3px solid {color}; padding: 20px; border-radius: 15px; text-align: center; background: white;">
+                        <div style="color: {color}; font-weight: bold;">{best['name']} 特定</div>
+                        <div style="display: flex; justify-content: space-around; margin-top: 15px;">
+                            <div><div style="color: #666;">左・次</div><div class="next-num">{nl}</div><div class="rarity-tag">{get_rarity(nl)}</div></div>
+                            <div style="border-left: 1px solid #ddd;"></div>
+                            <div><div style="color: #666;">右・次</div><div class="next-num">{nr}</div><div class="rarity-tag">{get_rarity(nr)}</div></div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-            st.write("### 📋 配列の続き (15枚)")
-            rows = []
-            for i in range(15):
-                l_v = data["L"][pos_l + i] if (pos_l + i) < len(data["L"]) else None
-                r_v = data["R"][pos_r + i] if (pos_r + i) < len(data["R"]) else None
-                if l_v is None and r_v is None: break
-                rows.append({"左": get_card_display(l_v), "右": get_card_display(r_v)})
-            st.table(rows)
-            break
-    if not found: st.error("❌ 一致する配列がありません")
+                # 特定された配列をすぐに確認できる
+                with st.expander("🔍 この配列の続きを確認"):
+                    detail_data = []
+                    for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
+                        l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
+                        l_r = get_rarity(l_v); r_r = get_rarity(r_v)
+                        detail_data.append({
+                            "枚数先": i - best['lp'] + 1,
+                            "左": l_v, "左レア度": f"🌟 {l_r}" if is_rare(l_v) else l_r,
+                            "右": r_v, "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
+                        })
+                    st.table(detail_data)
+
+            else:
+                st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
+
+    render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
+    render_result(tab_res2, (len(h)>=4), "#1f77b4")
+
 else:
-    st.info("番号を入力してください")
-
-with st.expander("📊 全配列表データ（CSV）"):
-    if patterns:
-        sel = st.selectbox("配列選択", list(patterns.keys()))
-        d = patterns[sel]
-        m = max(len(d['L']), len(d['R']))
-        st.dataframe({
-            "左": [get_card_display(d['L'][i]) if i < len(d['L']) else "" for i in range(m)],
-            "右": [get_card_display(d['R'][i]) if i < len(d['R']) else "" for i in range(m)]
-        }, use_container_width=True)
+    st.info("カード番号を入力してください")
