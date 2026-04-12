@@ -29,53 +29,40 @@ def get_color_and_rarity(n):
         return "#FFFFFF", "N"
     except: return "#FFFFFF", "N"
 
-# --- 2. データ読み込み ---
+# --- 2. データ読み込み (配列6個分) ---
 @st.cache_data
 def load_data():
     try:
         df = pd.read_csv("配列.csv", header=None)
         patterns = {}
-        valid_cols = [c for c in range(df.shape[1])]
-        for i in range(0, len(valid_cols) - 1, 2):
-            l_data = pd.to_numeric(df.iloc[1:, valid_cols[i]], errors='coerce').dropna().astype(int).tolist()
-            r_data = pd.to_numeric(df.iloc[1:, valid_cols[i+1]], errors='coerce').dropna().astype(int).tolist()
-            if l_data or r_data:
-                patterns[f"配列 {i//2 + 1}"] = {"L": l_data, "R": r_data}
+        # 6つの配列（1配列あたり左右2列＝計12列まで対応）
+        for i in range(6):
+            l_col = i * 2
+            r_col = i * 2 + 1
+            if l_col < df.shape[1] and r_col < df.shape[1]:
+                l_data = pd.to_numeric(df.iloc[1:, l_col], errors='coerce').dropna().astype(int).tolist()
+                r_data = pd.to_numeric(df.iloc[1:, r_col], errors='coerce').dropna().astype(int).tolist()
+                if l_data or r_data:
+                    patterns[f"配列 {i + 1}"] = {"L": l_data, "R": r_data}
         return patterns
     except: return {}
 
-# --- 3. 探索エンジン（初期の正確なロジックに修正） ---
+# --- 3. 探索エンジン (跨ぎなし・独立検索) ---
 def find_matches(history, L, R):
     if not history: return []
     h_len = len(history)
     results = []
     
-    # L側スタート、R側スタートの両方を検証
-    for side in ["L", "R"]:
-        main, sub = (L, R) if side == "L" else (R, L)
-        
-        # メイン側のどこかに履歴の1枚目があるか探す
-        for p in range(len(main)):
-            if history[0] == main[p]:
-                # サブ側の検索範囲（前後20枚程度をカバー）
-                for start_s in range(max(0, p-20), min(len(sub), p+20)):
-                    curr_m, curr_s = p + 1, start_s
-                    possible = True
-                    # 2枚目以降の履歴を、左右の進捗(curr_m, curr_s)を見ながら照合
-                    for i in range(1, h_len):
-                        if curr_m < len(main) and history[i] == main[curr_m]:
-                            curr_m += 1
-                        elif curr_s < len(sub) and history[i] == sub[curr_s]:
-                            curr_s += 1
-                        else:
-                            possible = False
-                            break
-                    if possible:
-                        # 確定した位置（サイドに合わせて戻す）
-                        results.append({
-                            "lp": curr_m if side=="L" else curr_s,
-                            "rp": curr_s if side=="L" else curr_m
-                        })
+    # 履歴が全て「左」にあるか、全て「右」にあるかのみを判定（跨ぎなし）
+    for side_name, side_list in [("L", L), ("R", R)]:
+        for p in range(len(side_list) - h_len + 1):
+            # 履歴とシリンダーの連続した範囲が一致するか
+            if side_list[p:p + h_len] == history:
+                results.append({
+                    "lp": p + h_len if side_name == "L" else 0, # 左で見つかったら左を進める
+                    "rp": p + h_len if side_name == "R" else 0, # 右で見つかったら右を進める
+                    "match_side": side_name
+                })
     return results
 
 # --- 4. UI設定 ---
@@ -123,22 +110,26 @@ if st.session_state.history and patterns:
     all_hits = []
     for name, data in patterns.items():
         res = find_matches(h, data["L"], data["R"])
-        for ht in res: all_hits.append({**ht, "name": name})
+        for ht in res: all_hits.append({**ht, "name": name, "data": data})
 
     if all_hits:
+        # 複数ヒットした場合は最初のものを表示
         best = all_hits[0]
-        d = patterns[best['name']]
+        d = best['data']
         
         def get_next_rare_info(lst, start_pos):
+            if start_pos >= len(lst): return {"name": "終了", "count": "-", "color": "#FFFFFF"}
             for i in range(start_pos, len(lst)):
                 if lst[i] in RARE_NUMS:
                     return {"name": get_card_display(lst[i]), "count": i - start_pos + 1, "color": get_color_and_rarity(lst[i])[0]}
             return {"name": "不明", "count": "-", "color": "#FFFFFF"}
 
-        rare_l = get_next_rare_info(d['L'], best['lp'])
-        rare_r = get_next_rare_info(d['R'], best['rp'])
+        # ヒットした側の位置情報を使って次レアを表示
+        # (跨ぎがないため、ヒットしなかった方のシリンダーは現在位置0として計算)
+        rare_l = get_next_rare_info(d['L'], best['lp'] if best['match_side'] == "L" else 0)
+        rare_r = get_next_rare_info(d['R'], best['rp'] if best['match_side'] == "R" else 0)
 
-        st.subheader(f"📍 {best['name']}")
+        st.subheader(f"📍 {best['name']} ({'左' if best['match_side'] == 'L' else '右'}で一致)")
         
         col_l, col_r = st.columns(2)
         with col_l:
@@ -147,8 +138,6 @@ if st.session_state.history and patterns:
                 <div class="rare-name" style="color:{rare_l['color']};">{rare_l['name']}</div>
                 <div class="rare-count">{rare_l['count']}枚目</div>
             </div>""", unsafe_allow_html=True)
-            val = d['L'][best['lp']] if best['lp'] < len(d['L']) else None
-            st.caption(f"直後の番号: {get_card_display(val)}")
 
         with col_r:
             st.markdown(f"""<div class="next-rare-box">
@@ -156,16 +145,16 @@ if st.session_state.history and patterns:
                 <div class="rare-name" style="color:{rare_r['color']};">{rare_r['name']}</div>
                 <div class="rare-count">{rare_r['count']}枚目</div>
             </div>""", unsafe_allow_html=True)
-            val = d['R'][best['rp']] if best['rp'] < len(d['R']) else None
-            st.caption(f"直後の番号: {get_card_display(val)}")
 
-        st.write("### 📋 配列の続き")
+        st.write("### 📋 配列の続き (15枚表示)")
         detail_data = []
-        for i in range(20):
-            idx_l, idx_r = best['lp'] + i, best['rp'] + i
+        start_l = best['lp'] if best['match_side'] == "L" else 0
+        start_r = best['rp'] if best['match_side'] == "R" else 0
+        
+        for i in range(15):
+            idx_l, idx_r = start_l + i, start_r + i
             l_val = d['L'][idx_l] if idx_l < len(d['L']) else None
             r_val = d['R'][idx_r] if idx_r < len(d['R']) else None
-            if l_val is None and r_val is None: break
             detail_data.append({
                 "左": get_card_display(l_val), 
                 "右": get_card_display(r_val)
