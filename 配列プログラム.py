@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
+import os
 
 # --- 1. レアリティ・名称定義 ---
 def get_rarity(n):
@@ -74,6 +75,7 @@ def find_matches(history, L, R):
 # --- 4. 表生成関数 ---
 def render_custom_table(df_data, height=450):
     df_html = df_data.to_html(index=False, escape=False)
+    # 履歴の数字のみを赤くする（No.列などを除外するため、特定のtdのみ置換）
     for n in st.session_state.history:
         target = f'<td>{n}</td>'
         replacement = f'<td><span style="color:#ff4b4b; font-weight:bold;">{n}</span></td>'
@@ -85,6 +87,8 @@ def render_custom_table(df_data, height=450):
             table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 16px; table-layout: fixed; color: #eee; }}
             th {{ position: sticky; top: 0; background: #262626; z-index: 5; border: 1px solid #444; padding: 8px; text-align: center; }}
             td {{ border: 1px solid #333; padding: 8px; text-align: center; background: #1a1a1a; pointer-events: none; }}
+            /* No.列（1番目の列）を小さくし、色を固定 */
+            td:nth-child(1), th:nth-child(1) {{ width: 50px !important; font-size: 12px; color: #888 !important; }}
         </style>
         {df_html}
     </div>
@@ -119,6 +123,30 @@ if 'history' not in st.session_state: st.session_state.history = []
 if 'reset_counter' not in st.session_state: st.session_state.reset_counter = 0
 
 patterns = load_data()
+
+# --- 新項目：配列のぞき見早見表 ---
+peek_tab = st.expander("👁 配列のぞき見早見表 (最初のカード)")
+with peek_tab:
+    if patterns:
+        cols = st.columns(3)
+        for idx, (p_name, data) in enumerate(patterns.items()):
+            col = cols[idx % 3]
+            # 最初のカードを取得（L側）
+            first_no = data["L"][0]
+            name = get_rarity(first_no)
+            with col:
+                # 画像表示用（imagesフォルダに 番号.jpg がある前提。なければテキスト表示）
+                img_path = f"images/{first_no}.jpg"
+                if os.path.exists(img_path):
+                    st.image(img_path, use_container_width=True)
+                else:
+                    st.write(f"【画像なし】")
+                
+                st.write(f"**{p_name}**")
+                st.write(f"No.{first_no}: {name}")
+                if st.button(f"この配列を選択", key=f"sel_{p_name}"):
+                    st.session_state.history = [first_no]
+                    st.rerun()
 
 # --- 履歴 ---
 if st.session_state.history:
@@ -201,7 +229,7 @@ if st.session_state.history and patterns:
 
                 st.markdown(f"""
 <div style="border: 3px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: #1a1d24; margin-bottom: 10px;">
-    <div style="color: {color}; font-weight: bold; font-size: 18px;">{best['name']} 特定</div>
+    <div style="color: {color}; font-weight: bold; font-size: 18px;">{best['name']}</div>
     <div style="display: flex; justify-content: space-around; margin-top: 5px; border-bottom: 1px solid #333; padding-bottom: 10px;">
         <div><div style="color:#aaa; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#ff4b4b;">{nl}</div><div style="font-size:10px; color:#eee;">{get_rarity(nl)}</div></div>
         <div><div style="color:#aaa; font-size:10px;">右・次</div><div style="font-size:28px; font-weight:bold; color:#ff4b4b;">{nr}</div><div style="font-size:10px; color:#eee;">{get_rarity(nr)}</div></div>
