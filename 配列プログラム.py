@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import re
@@ -82,7 +81,7 @@ def color_red_history(val):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
-# CSS: スクロール以外のツールバー（ダウンロード等）を強制非表示
+# CSS: ツールバー非表示、クリック時の枠線(フォーカス)無効化、並び替えアイコン非表示
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
@@ -93,12 +92,19 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
-    /* データフレームのツールバー（保存・ダウンロード・検索）を非表示 */
-    [data-testid="stElementToolbar"] {
-        display: none !important;
-    }
+    /* 1. ツールバー（ダウンロード等）を隠す */
+    [data-testid="stElementToolbar"] { display: none !important; }
     
+    /* 2. セル選択時の赤枠・青枠を消す */
+    [data-testid="stDataFrame"] div:focus { outline: none !important; }
+    [data-testid="stDataFrame"] [role="gridcell"]:focus { outline: none !important; }
+    
+    /* 3. テーブル内の文字サイズ設定 */
     div[data-testid="stDataFrame"] td { font-size: 20px !important; }
+    
+    /* 4. 並び替え矢印を非表示にし、ヘッダーのクリック感をなくす */
+    [data-testid="stDataFrame"] th [data-testid="stIcon"] { display: none !important; }
+    [data-testid="stDataFrame"] th { pointer-events: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -227,7 +233,6 @@ if st.session_state.history and patterns:
                             })
                 if rare_list:
                     df_rare = pd.DataFrame(rare_list).sort_values("枚数先")
-                    # st.tableは標準でツールバーがないためそのまま使用
                     st.table(df_rare)
                 else:
                     st.write("この先にレアカードは見つかりませんでした。")
