@@ -64,12 +64,8 @@ def find_matches(history, L, R):
                             possible = False
                             break
                     if possible:
-                        results.append({
-                            "lp": curr_m if side=="L" else curr_s, 
-                            "rp": curr_s if side=="L" else curr_m, 
-                            "orig_lp": p if side=="L" else start_s, 
-                            "orig_rp": start_s if side=="L" else p
-                        })
+                        results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m, 
+                                        "orig_lp": p if side=="L" else start_s, "orig_rp": start_s if side=="L" else p})
     return results
 
 # --- 4. スタイル関数 ---
@@ -95,25 +91,13 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
-    /* 1. ツールバーと検索機能を非表示 */
-    [data-testid="stElementToolbar"], [data-testid="stDataFrameSearch"] { display: none !important; }
+    /* スクロールエリアの設定 */
+    .scroll-box { height: 400px; overflow-y: auto; border: 1px solid #444; }
     
-    /* 2. セル選択時のエフェクトを完全に無効化 */
-    [data-testid="stDataFrame"] div:focus, [data-testid="stDataFrame"] canvas:focus { outline: none !important; }
-    
-    /* 3. 【最重要】ヘッダーのクリックを物理的に禁止（並び替え防止） */
-    thead tr th {
-        pointer-events: none !important;
-    }
-    
-    /* 並び替え用アイコン等を強制非表示 */
-    [data-testid="stDataFrame"] [data-testid="stIcon"],
-    [data-testid="stDataFrame"] .sort-icon {
-        display: none !important;
-        visibility: hidden !important;
-    }
-
-    div[data-testid="stDataFrame"] td { font-size: 20px !important; }
+    /* 静的テーブル(st.table)のカスタマイズ */
+    div[data-testid="stTable"] table { width: 100% !important; font-size: 20px !important; }
+    div[data-testid="stTable"] th { background-color: #333 !important; color: white !important; pointer-events: none !important; }
+    div[data-testid="stTable"] td { padding: 5px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -161,8 +145,10 @@ with all_patterns_tab:
                 if "LR" in r_name or "LLR" in r_name: return f"🌟 {r_name}"
                 return str(v)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
-        df_display = pd.DataFrame(view_data)
-        st.dataframe(df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
+        
+        st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
+        st.table(pd.DataFrame(view_data))
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
@@ -185,16 +171,13 @@ if st.session_state.history and patterns:
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
                 
-                st.markdown(f"""
-                    <div style="border: 3px solid {color}; padding: 20px; border-radius: 15px; text-align: center; background: white; margin-bottom: 20px;">
-                        <div style="color: {color}; font-weight: bold;">{best['name']} 特定</div>
-                        <div style="display: flex; justify-content: space-around; margin-top: 15px;">
-                            <div><div style="color: #666;">左・次</div><div class="next-num">{nl}</div><div class="rarity-tag">{get_rarity(nl)}</div></div>
-                            <div style="border-left: 1px solid #ddd;"></div>
-                            <div><div style="color: #666;">右・次</div><div class="next-num">{nr}</div><div class="rarity-tag">{get_rarity(nr)}</div></div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div style="border: 3px solid {color}; padding: 20px; border-radius: 15px; text-align: center; background: white; margin-bottom: 20px;">'
+                            f'<div style="color: {color}; font-weight: bold;">{best["name"]} 特定</div>'
+                            f'<div style="display: flex; justify-content: space-around; margin-top: 15px;">'
+                            f'<div><div style="color: #666;">左・次</div><div class="next-num">{nl}</div><div class="rarity-tag">{get_rarity(nl)}</div></div>'
+                            f'<div style="border-left: 1px solid #ddd;"></div>'
+                            f'<div><div style="color: #666;">右・次</div><div class="next-num">{nr}</div><div class="rarity-tag">{get_rarity(nr)}</div></div>'
+                            f'</div></div>', unsafe_allow_html=True)
 
                 st.write("### 🔍 この配列の続きを確認")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
@@ -207,28 +190,34 @@ if st.session_state.history and patterns:
                     def get_detail_disp(v):
                         if v is None: return ""
                         r_name = get_rarity(v)
-                        if "LR" in r_name or "LLR" in r_name: return f"🌟 {r_name}"
-                        return str(v)
+                        return f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
+
                     detail_data.append({
                         "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
                         "左": get_detail_disp(l_v),
                         "右": get_detail_disp(r_v)
                     })
-                df_det = pd.DataFrame(detail_data)
-                st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
+                
+                st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
+                # st.tableは赤字表示(style.map)が直接使えないため、HTMLで出力
+                df_html = pd.DataFrame(detail_data).to_html(index=False, escape=False)
+                # 履歴に含まれる番号を赤くする置換処理
+                for num_in_h in st.session_state.history:
+                    df_html = df_html.replace(f'<td>{num_in_h}</td>', f'<td><span style="color:red; font-weight:bold;">{num_in_h}</span></td>')
+                st.markdown(df_html, unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
                 st.write("### 💎 以降のレアカード一覧")
                 rare_list = []
                 for side in ["L", "R"]:
-                    curr_p = best['lp'] if side == "L" else best['rp']
-                    for i in range(curr_p, len(d[side])):
-                        v = d[side][i]
+                    current_p = best['lp'] if side == "L" else best['rp']
+                    target_list = d[side]
+                    for i in range(current_p, len(target_list)):
+                        v = target_list[i]
                         if is_rare(v):
-                            rare_list.append({"シリンダー": "左" if side == "L" else "右", "枚数先": i - curr_p + 1, "カード名": get_rarity(v)})
+                            rare_list.append({"シリンダー": "左" if side == "L" else "右", "枚数先": i - current_p + 1, "カード名": get_rarity(v)})
                 if rare_list:
                     st.table(pd.DataFrame(rare_list).sort_values("枚数先"))
-                else:
-                    st.write("レアカードなし")
             else:
                 st.markdown('<div style="color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px;">❌ 一致なし</div>', unsafe_allow_html=True)
 
