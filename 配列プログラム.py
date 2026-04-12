@@ -12,7 +12,7 @@ def get_rarity(n):
             1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
             26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
             55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3",
-            101:"ランダムパラレルLLR"  # 修正：パラレルLLRドーン → ランダムパラレルLLR
+            101:"ランダムパラレルLLR"
         }
         if n in names: return names[n]
         rarities = {
@@ -103,13 +103,14 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; min-height: 50px; }
     
-    /* 入力欄：白背景、黒太文字で見やすく */
+    /* 入力欄の改善：真っ黒(#000)に強制指定 */
     div[data-testid="stNumberInput"] input {
         background-color: #ffffff !important;
         color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
         caret-color: #000000 !important;
         font-weight: 900 !important;
-        font-size: 20px !important;
+        font-size: 22px !important;
     }
     
     .half-width-container { width: 50% !important; min-width: 200px; }
@@ -130,178 +131,16 @@ patterns = load_data()
 # --- 出たカード (履歴) ---
 hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
 display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
-st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', unsafe_allow_html=True) # 修正：履歴 → 出たカード
+st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
-st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="ここに番号を入力...", # 修正：プレースホルダー変更
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="ここに番号を入力...", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
-# --- ボタン列 (横幅半分) ---
+# --- ボタン列 ---
 st.markdown('<div class="half-width-container">', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
     if st.button("確定", use_container_width=True):
-        input_key = f"num_in_{st.session_state.reset_counter}"
-        input_val = st.session_state.get(input_key)
-        if input_val is not None:
-            st.session_state.history.append(int(input_val))
-            st.session_state.reset_counter += 1
-            st.rerun()
-with c2:
-    if st.button("消す", use_container_width=True):
-        if st.session_state.history:
-            st.session_state.history.pop()
-            st.rerun()
-st.markdown('</div>', unsafe_allow_html=True)
-
-st.divider()
-
-# --- 6. 配列表一覧表示 ---
-all_patterns_tab = st.expander("📊 配列表一覧")
-with all_patterns_tab:
-    if patterns:
-        p_names = list(patterns.keys())
-        sel_p = st.selectbox("配列選択", p_names, label_visibility="collapsed")
-        target_d = patterns[sel_p]
-        view_data = []
-        for i in range(max(len(target_d['L']), len(target_d['R']))):
-            l_v = target_d['L'][i] if i < len(target_d['L']) else None
-            r_v = target_d['R'][i] if i < len(target_d['R']) else None
-            def get_disp(v):
-                if v is None: return ""
-                rn = get_rarity(v)
-                return f"🌟 {rn}" if ("LR" in rn or "LLR" in rn) else str(v)
-            view_data.append({"No.": i+1, "左": get_disp(l_v), "右": get_disp(r_v)})
-        render_custom_table(pd.DataFrame(view_data))
-
-# --- 7. 解析結果表示 ---
-if st.session_state.history and patterns:
-    h = st.session_state.history
-    has_rare = any(is_rare(n) for n in h)
-    # 修正：４枚一致検索 → ４枚のカードから検索
-    tab_res1, tab_res2 = st.tabs(["① ４枚のカードから検索", "② レア探索"])
-
-    def render_result(tab_obj, active_req, color):
-        with tab_obj:
-            if not active_req:
-                st.warning("枚数不足")
-                return
-            hits = []
-            for name, data in patterns.items():
-                res = find_matches(h, data["L"], data["R"])
-                for ht in res: hits.append({**ht, "name": name})
-
-            if hits:
-                best = hits[0]; d = patterns[best['name']]
-                nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
-                nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
-                
-                future_rares = []
-                for side in ["L", "R"]:
-                    curr_pos = best['lp'] if side == "L" else best['rp']
-                    track = d[side]
-                    for i in range(curr_pos, len(track)):
-                        val = track[i]
-                        if is_target_rare(val):
-                            future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
-                
-                future_rares = sorted(future_rares, key=lambda x: x['dist'])
-                future_texts = [f"💎 <span style='color:#00ffcc;'>{r['dist']}枚先</span>: {r['name']}" for r in future_rares]
-                rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
-
-                st.markdown(f"""
-<div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 10px;">
-    <div style="color: #fff; font-weight: bold; font-size: 20px; margin-bottom:10px;">{best['name']}</div>
-    <div style="display: flex; justify-content: space-around; border-bottom: 1px solid #444; padding-bottom: 15px;">
-        <div style="flex:1;"><div style="color:#aaa; font-size:12px;">左・次</div><div style="font-size:32px; font-weight:bold; color:#ff4b4b;">{nl}</div><div style="font-size:11px; color:#eee;">{get_rarity(nl)}</div></div>
-        <div style="width:1px; background:#444; margin:0 10px;"></div>
-        <div style="flex:1;"><div style="color:#aaa; font-size:12px;">右・次</div><div style="font-size:32px; font-weight:bold; color:#ff4b4b;">{nr}</div><div style="font-size:11px; color:#eee;">{get_rarity(nr)}</div></div>
-    </div>
-    <div style="margin-top: 15px; text-align: left; font-size: 14px; color: #eee; background:#000; padding:10px; border-radius:5px;">
-        <strong style="color:#00ffcc;">🔜 レア予測:</strong><br>{rare_predict_html}
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-                st.write("### 🔍 配列の続き")
-                start_l, start_r = best['orig_lp'], best['orig_rp']
-                detail_data = []
-                for i in range(30):
-                    idx_l, idx_r = start_l + i, start_r + i
-                    l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
-                    r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
-                    def get_detail_disp(v):
-                        if v is None: return ""
-                        rn = get_rarity(v)
-                        return f"🌟 {rn}" if ("LR" in rn or "LLR" in rn) else str(v)
-                    detail_data.append({
-                        "No.": idx_l + 1,
-                        "枚数": "現在" if idx_l < best['lp'] and idx_r < best['rp'] else f"{max(0, idx_l - best['lp'] + 1, idx_r - best['rp'] + 1)}枚先",
-                        "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
-                    })
-                render_custom_table(pd.DataFrame(detail_data), height=400)
-            else:
-                st.error("一致なし")
-
-    render_result(tab_res1, (len(h)>=4), "#60b4ff")
-    render_result(tab_res2, (has_rare and len(h)>=2), "#ff4b4b")
-
-st.divider()
-
-# --- 8. 👀配列のぞき見用 ---
-# 修正：👁 配列のぞき見早見表 (末尾レアカード）→ 👀配列のぞき見用
-peek_expander = st.expander("👀配列のぞき見用")
-with peek_expander:
-    if patterns:
-        for p_name, data in patterns.items():
-            l_last = data["L"][-1]
-            r_last = data["R"][-1]
-            
-            st.markdown(f"""
-            <div class="peek-box">
-                <div style="color: #fff; font-weight: bold; font-size: 18px; margin-bottom:10px;">{p_name}</div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col_l, col_r = st.columns(2)
-            with col_l:
-                img_path_l = f"images/{l_last}.jpg"
-                if os.path.exists(img_path_l):
-                    st.image(img_path_l, use_container_width=True)
-                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>左末尾: No.{l_last}<br>{get_rarity(l_last)}</div>", unsafe_allow_html=True)
-
-            with col_r:
-                img_path_r = f"images/{r_last}.jpg"
-                if os.path.exists(img_path_r):
-                    st.image(img_path_r, use_container_width=True)
-                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>右末尾: No.{r_last}<br>{get_rarity(r_last)}</div>", unsafe_allow_html=True)
-            
-            # 各配列の全レア出現予測タブ
-            with st.expander(f"{p_name} の全レアカード出現順"):
-                rares_found = []
-                for side_key in ["L", "R"]:
-                    track = data[side_key]
-                    side_label = "左" if side_key == "L" else "右"
-                    for idx, val in enumerate(track):
-                        if is_target_rare(val):
-                            rares_found.append({
-                                "pos": idx + 1,
-                                "name": get_rarity(val),
-                                "side": side_label
-                            })
-                
-                if rares_found:
-                    rares_found = sorted(rares_found, key=lambda x: x['pos'])
-                    for r in rares_found:
-                        st.markdown(f"📍 **{r['pos']}枚目** ({r['side']}): {r['name']}")
-                else:
-                    st.write("この配列にLR/LLR情報はありません")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-    else:
-        st.info("データが読み込めていません。")
-
-if not st.session_state.history:
-    st.info("番号を入力してください")
