@@ -78,7 +78,6 @@ def render_custom_table(df_data, height=450):
     for n in st.session_state.history:
         target = rf'<td>{n}</td>'
         replacement = f'<td><span style="color:#ffdd00; font-weight:bold;">{n}</span></td>'
-        # No.列を避けるため、前に他のセルがある場合のみ置換
         df_html = re.sub(rf'(<td>.*?</td>\s*){target}', rf'\1{replacement}', df_html)
 
     html_code = f"""
@@ -107,24 +106,29 @@ st.markdown("""
     div[data-testid="stNumberInput"] input {
         background-color: #ffffff !important;
         color: #000000 !important;
-        -webkit-text-fill-color: #000000 !important;
-        caret-color: #000000 !important;
-        font-weight: normal !important;
-        font-size: 18px !important;
-    }
-    
-    div[data-testid="stNumberInput"] input::placeholder {
-        color: #666666 !important;
-        -webkit-text-fill-color: #666666 !important;
-        opacity: 1 !important;
-        font-weight: normal !important;
     }
     
     .half-width-container { width: 50% !important; min-width: 200px; }
-    div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
-    .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; font-size: 18px !important; background-color: #333 !important; color: white !important; border: 1px solid #555 !important; }
-    .stButton > button:hover { border-color: #ff4b4b !important; color: #ff4b4b !important; }
     .peek-box { border: 2px solid #60b4ff; padding: 10px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 5px; }
+    
+    /* 強制横並び用レイアウト */
+    .force-row {
+        display: flex !important;
+        flex-direction: row !important;
+        justify-content: space-around !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+    .force-col {
+        flex: 1 !important;
+        text-align: center !important;
+    }
+    .force-col img {
+        width: 100% !important;
+        max-width: 150px !important; /* 2/5程度のサイズに制限 */
+        height: auto !important;
+        border-radius: 5px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -249,7 +253,7 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 👀配列のぞき見用 (修正版) ---
+# --- 8. 👀配列のぞき見用 (CSSによる強制横並び版) ---
 peek_expander = st.expander("👀配列のぞき見用")
 with peek_expander:
     if patterns:
@@ -258,18 +262,24 @@ with peek_expander:
             r_last = data["R"][-1]
             st.markdown(f'<div class="peek-box">{p_name}</div>', unsafe_allow_html=True)
             
-            # カラムを使って画像を横並びにする (スマホ対応)
-            c_img_l, c_img_r = st.columns(2)
-            with c_img_l:
-                path_l = f"images/{l_last}.jpg"
-                if os.path.exists(path_l):
-                    st.image(path_l, use_container_width=True)
-                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:13px; font-weight:bold;'>左末尾: No.{l_last}</div>", unsafe_allow_html=True)
-            with c_img_r:
-                path_r = f"images/{r_last}.jpg"
-                if os.path.exists(path_r):
-                    st.image(path_r, use_container_width=True)
-                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:13px; font-weight:bold;'>右末尾: No.{r_last}</div>", unsafe_allow_html=True)
+            # 画像パス（ローカル/GitHub対応）
+            img_l_src = f"images/{l_last}.jpg"
+            img_r_src = f"images/{r_last}.jpg"
+            
+            # HTMLで直接2列レイアウトを組む（Streamlitのカラムは使わない）
+            img_html = f"""
+            <div class="force-row">
+                <div class="force-col">
+                    <img src="data:image/jpeg;base64," style="display:none;" /> {"<img src='app/static/" + img_l_src + "' />" if os.path.exists(img_l_src) else "<div style='background:#333;height:100px;border-radius:5px;display:flex;align-items:center;justify-content:center;'>No Image</div>"}
+                    <div style='color:#aaa; font-size:13px; font-weight:bold; margin-top:5px;'>左末尾: No.{l_last}</div>
+                </div>
+                <div class="force-col">
+                    {"<img src='app/static/" + img_r_src + "' />" if os.path.exists(img_r_src) else "<div style='background:#333;height:100px;border-radius:5px;display:flex;align-items:center;justify-content:center;'>No Image</div>"}
+                    <div style='color:#aaa; font-size:13px; font-weight:bold; margin-top:5px;'>右末尾: No.{r_last}</div>
+                </div>
+            </div>
+            """
+            st.markdown(img_html, unsafe_allow_html=True)
             
             # 出現レア欄を一段下げる
             st.markdown("<div style='margin-top:15px;'></div>", unsafe_allow_html=True)
