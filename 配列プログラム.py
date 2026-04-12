@@ -5,7 +5,6 @@ import pandas as pd
 RARE_NUMS = [1, 7, 16, 18, 26, 27, 36, 48, 55, 58, 61, 99]
 
 def get_card_display(n):
-    # 数値以外や空の場合は「終了」または「不明」
     if n is None or n == "" or str(n) == "nan": return "終了"
     try:
         n_int = int(float(n))
@@ -36,7 +35,6 @@ def load_data():
     try:
         df = pd.read_csv("配列.csv", header=None)
         patterns = {}
-        # 有効な列をペアで取得
         valid_cols = [c for c in range(df.shape[1])]
         for i in range(0, len(valid_cols) - 1, 2):
             l_data = pd.to_numeric(df.iloc[1:, valid_cols[i]], errors='coerce').dropna().astype(int).tolist()
@@ -155,11 +153,25 @@ if st.session_state.history and patterns:
         detail_data = []
         for i in range(20):
             idx_l, idx_r = best['lp'] + i, best['rp'] + i
-            l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
-            r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
-            if l_v is None and r_v is None: break
+            l_val = d['L'][idx_l] if idx_l < len(d['L']) else None
+            r_val = d['R'][idx_r] if idx_r < len(d['R']) else None
+            if l_val is None and r_val is None: break
             detail_data.append({
-                "左": get_card_display(l_v), 
-                "右": get_card_display(r_v)
+                "左": get_card_display(l_val), 
+                "右": get_card_display(r_val)
             })
-        st.table(detail_
+        st.table(detail_data)  # ← ここを修正しました
+    else:
+        st.error("❌ 一致なし（不明）")
+else:
+    st.info("番号を入力してください")
+
+with st.expander("📊 全配列表の確認"):
+    if patterns:
+        sel_p = st.selectbox("配列データ選択", list(patterns.keys()))
+        t_d = patterns[sel_p]
+        max_len = max(len(t_d['L']), len(t_d['R']))
+        l_view = [get_card_display(t_d['L'][i]) if i < len(t_d['L']) else "終了" for i in range(max_len)]
+        r_view = [get_card_display(t_d['R'][i]) if i < len(t_d['R']) else "終了" for i in range(max_len)]
+        df_view = pd.DataFrame({"左": l_view, "右": r_view})
+        st.dataframe(df_view, use_container_width=True)
