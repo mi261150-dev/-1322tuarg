@@ -102,29 +102,12 @@ st.markdown("""
     h1, h2, h3 { color: #ffffff !important; }
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; margin-bottom: 10px; min-height: 50px; }
-    
-    /* ボタンエリアの横幅を半分に制限 */
-    .half-width-container {
-        width: 50% !important;
-        min-width: 200px;
-    }
-    
-    div[data-testid="stHorizontalBlock"] {
-        gap: 0.5rem !important;
-    }
+    .half-width-container { width: 50% !important; min-width: 200px; }
+    div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
     .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; font-size: 18px !important; background-color: #333 !important; color: white !important; border: 1px solid #555 !important; }
     .stButton > button:hover { border-color: #ff4b4b !important; color: #ff4b4b !important; }
     input { background-color: #222 !important; color: white !important; border: 1px solid #444 !important; }
-    
-    /* のぞき見用ボックススタイル */
-    .peek-box {
-        border: 2px solid #60b4ff;
-        padding: 10px;
-        border-radius: 10px;
-        text-align: center;
-        background: #111;
-        margin-bottom: 15px;
-    }
+    .peek-box { border: 2px solid #60b4ff; padding: 10px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 15px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -213,8 +196,9 @@ if st.session_state.history and patterns:
                             future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
                 
                 future_rares = sorted(future_rares, key=lambda x: x['dist'])
+                # 枚数予測の表示
                 future_texts = [f"💎 <span style='color:#00ffcc;'>{r['dist']}枚先</span>: {r['name']}" for r in future_rares]
-                rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
+                rare_predict_html = "<br>".join(future_texts) if future_texts else "以降のレアなし"
 
                 st.markdown(f"""
 <div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 10px;">
@@ -225,7 +209,7 @@ if st.session_state.history and patterns:
         <div style="flex:1;"><div style="color:#aaa; font-size:12px;">右・次</div><div style="font-size:32px; font-weight:bold; color:#ff4b4b;">{nr}</div><div style="font-size:11px; color:#eee;">{get_rarity(nr)}</div></div>
     </div>
     <div style="margin-top: 15px; text-align: left; font-size: 14px; color: #eee; background:#000; padding:10px; border-radius:5px;">
-        <strong style="color:#00ffcc;">🔜 レア予測:</strong><br>{rare_predict_html}
+        <strong style="color:#00ffcc;">🔜 この弾のレアカード出現予測:</strong><br>{rare_predict_html}
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -255,40 +239,39 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 配列のぞき見早見表 (最下部・特定レイアウト・6配列縦並び) ---
-peek_expander = st.expander("👁 配列のぞき見早見表")
+# --- 8. 配列のぞき見早見表 (最下部・最後(末尾)のカードを表示) ---
+peek_expander = st.expander("👁 配列のぞき見早見表 (最後のカード)")
 with peek_expander:
     if patterns:
         for p_name, data in patterns.items():
-            l_first = data["L"][0]
-            r_first = data["R"][0]
+            # 最後のカードを取得
+            l_last = data["L"][-1]
+            r_last = data["R"][-1]
             
-            # 「配列n」解析結果と同じ枠組レイアウト
             st.markdown(f"""
             <div class="peek-box">
                 <div style="color: #fff; font-weight: bold; font-size: 18px; margin-bottom:10px;">{p_name}</div>
             </div>
             """, unsafe_allow_html=True)
             
-            # 枠内に画像と情報を配置（縦にボタンを並べるためカラム化）
             col_l, col_r = st.columns(2)
             
             with col_l:
-                img_path_l = f"images/{l_first}.jpg"
+                img_path_l = f"images/{l_last}.jpg"
                 if os.path.exists(img_path_l):
                     st.image(img_path_l, use_container_width=True)
-                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>左始: No.{l_first}<br>{get_rarity(l_first)}</div>", unsafe_allow_html=True)
-                if st.button(f"特定 (左)", key=f"peek_l_{p_name}"):
-                    st.session_state.history = [l_first]
+                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>左末尾: No.{l_last}<br>{get_rarity(l_last)}</div>", unsafe_allow_html=True)
+                if st.button(f"特定 (左末)", key=f"peek_l_{p_name}"):
+                    st.session_state.history = [l_last]
                     st.rerun()
 
             with col_r:
-                img_path_r = f"images/{r_first}.jpg"
+                img_path_r = f"images/{r_last}.jpg"
                 if os.path.exists(img_path_r):
                     st.image(img_path_r, use_container_width=True)
-                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>右始: No.{r_first}<br>{get_rarity(r_first)}</div>", unsafe_allow_html=True)
-                if st.button(f"特定 (右)", key=f"peek_r_{p_name}"):
-                    st.session_state.history = [r_first]
+                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>右末尾: No.{r_last}<br>{get_rarity(r_last)}</div>", unsafe_allow_html=True)
+                if st.button(f"特定 (右末)", key=f"peek_r_{p_name}"):
+                    st.session_state.history = [r_last]
                     st.rerun()
             
             st.markdown("<br>", unsafe_allow_html=True)
