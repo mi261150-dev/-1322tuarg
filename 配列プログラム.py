@@ -44,18 +44,24 @@ def load_data():
         return patterns
     except: return {}
 
-# --- 3. 探索エンジン ---
+# --- 3. 探索エンジン（初期の正確なロジックに修正） ---
 def find_matches(history, L, R):
     if not history: return []
     h_len = len(history)
     results = []
+    
+    # L側スタート、R側スタートの両方を検証
     for side in ["L", "R"]:
         main, sub = (L, R) if side == "L" else (R, L)
+        
+        # メイン側のどこかに履歴の1枚目があるか探す
         for p in range(len(main)):
             if history[0] == main[p]:
-                for start_s in range(max(0, p-15), min(len(sub), p+15)):
+                # サブ側の検索範囲（前後20枚程度をカバー）
+                for start_s in range(max(0, p-20), min(len(sub), p+20)):
                     curr_m, curr_s = p + 1, start_s
                     possible = True
+                    # 2枚目以降の履歴を、左右の進捗(curr_m, curr_s)を見ながら照合
                     for i in range(1, h_len):
                         if curr_m < len(main) and history[i] == main[curr_m]:
                             curr_m += 1
@@ -65,7 +71,11 @@ def find_matches(history, L, R):
                             possible = False
                             break
                     if possible:
-                        results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
+                        # 確定した位置（サイドに合わせて戻す）
+                        results.append({
+                            "lp": curr_m if side=="L" else curr_s,
+                            "rp": curr_s if side=="L" else curr_m
+                        })
     return results
 
 # --- 4. UI設定 ---
@@ -160,7 +170,7 @@ if st.session_state.history and patterns:
                 "左": get_card_display(l_val), 
                 "右": get_card_display(r_val)
             })
-        st.table(detail_data)  # ← ここを修正しました
+        st.table(detail_data)
     else:
         st.error("❌ 一致なし（不明）")
 else:
