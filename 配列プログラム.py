@@ -99,7 +99,7 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 st.markdown("""
     <style>
     .stApp { background-color: #000000; }
-    h1, h2, h3 { color: #ffffff !important; text-shadow: 1px 1px 2px #ff4b4b; }
+    h1, h2, h3 { color: #ffffff !important; }
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; margin-bottom: 10px; min-height: 50px; }
     div[data-testid="stHorizontalBlock"] {
@@ -108,11 +108,12 @@ st.markdown("""
         flex-wrap: nowrap !important;
         gap: 0.5rem !important;
         width: 100% !important;
-        max-width: 400px;
     }
     .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; font-size: 18px !important; background-color: #333 !important; color: white !important; border: 1px solid #555 !important; }
     .stButton > button:hover { border-color: #ff4b4b !important; color: #ff4b4b !important; }
     input { background-color: #222 !important; color: white !important; border: 1px solid #444 !important; }
+    /* のぞき見表の横幅制限 */
+    .peek-container { max-width: 50%; margin: 0 auto; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -132,10 +133,10 @@ st.markdown(f'<div class="history-box">履歴: {display_text}</div>', unsafe_all
 st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
-# --- ボタン列 ---
+# --- ボタン列 (空白なし・横並び) ---
 c1, c2 = st.columns(2)
 with c1:
-    if st.button("確定"):
+    if st.button("確定", use_container_width=True):
         input_key = f"num_in_{st.session_state.reset_counter}"
         input_val = st.session_state.get(input_key)
         if input_val is not None:
@@ -143,7 +144,7 @@ with c1:
             st.session_state.reset_counter += 1
             st.rerun()
 with c2:
-    if st.button("消す"):
+    if st.button("消す", use_container_width=True):
         if st.session_state.history:
             st.session_state.history.pop()
             st.rerun()
@@ -151,7 +152,7 @@ with c2:
 st.divider()
 
 # --- 6. 配列表一覧表示 ---
-all_patterns_tab = st.expander("📊 配列表一覧 (CSVデータ確認)")
+all_patterns_tab = st.expander("📊 配列表一覧")
 with all_patterns_tab:
     if patterns:
         p_names = list(patterns.keys())
@@ -241,46 +242,37 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 新項目：配列のぞき見早見表 (最下部に配置・スマホ縦並び対応) ---
-st.subheader("👁 配列のぞき見早見表")
-if patterns:
-    for p_name, data in patterns.items():
-        # 各配列ごとに枠を作成
-        with st.container():
+# --- 8. 配列のぞき見早見表 (最下部・タブで隠蔽・横幅2分の1) ---
+peek_tab = st.expander("👁 配列のぞき見早見表")
+with peek_tab:
+    # 全体を横幅半分にするためのコンテナ
+    st.markdown('<div class="peek-container">', unsafe_allow_html=True)
+    if patterns:
+        for p_name, data in patterns.items():
             st.markdown(f"#### {p_name}")
             col_l, col_r = st.columns(2)
             
-            # 左(L)の最初と最後のカード
             l_first = data["L"][0]
-            l_last = data["L"][-1]
+            r_first = data["R"][0]
             
             with col_l:
-                # 左の画像
-                img_path = f"images/{l_first}.jpg"
-                if os.path.exists(img_path):
-                    st.image(img_path, caption=f"最初: No.{l_first}", use_container_width=True)
+                img_path_l = f"images/{l_first}.jpg"
+                if os.path.exists(img_path_l):
+                    st.image(img_path_l, caption=f"左始: {l_first}", use_container_width=True)
                 else:
-                    st.info(f"左始: No.{l_first} ({get_rarity(l_first)})")
-                
-                if st.button(f"左始で特定", key=f"btn_l_{p_name}"):
+                    st.info(f"左:{l_first}")
+                if st.button(f"左始", key=f"btn_l_{p_name}"):
                     st.session_state.history = [l_first]
                     st.rerun()
 
             with col_r:
-                # 右の画像 (データ構造上、R側の最初を表示)
-                r_first = data["R"][0]
                 img_path_r = f"images/{r_first}.jpg"
                 if os.path.exists(img_path_r):
-                    st.image(img_path_r, caption=f"最初(右): No.{r_first}", use_container_width=True)
+                    st.image(img_path_r, caption=f"右始: {r_first}", use_container_width=True)
                 else:
-                    st.info(f"右始: No.{r_first} ({get_rarity(r_first)})")
-                
-                if st.button(f"右始で特定", key=f"btn_r_{p_name}"):
+                    st.info(f"右:{r_first}")
+                if st.button(f"右始", key=f"btn_r_{p_name}"):
                     st.session_state.history = [r_first]
                     st.rerun()
-            st.markdown("<br>", unsafe_allow_html=True)
-else:
-    st.info("データが読み込めていません。")
-
-if not st.session_state.history:
-    st.info("番号を入力してください")
+            st.markdown("---")
+    st.markdown('</div>', unsafe_allow_html=True)
