@@ -64,7 +64,8 @@ def find_matches(history, L, R):
                             possible = False
                             break
                     if possible:
-                        results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
+                        results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m, 
+                                        "orig_lp": p if side=="L" else start_s, "orig_rp": start_s if side=="L" else p})
     return results
 
 # --- 4. スタイル関数 ---
@@ -80,7 +81,6 @@ def color_red_history(val):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
-# CSS: 文字サイズを大きくし、左列を右詰めにする
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
@@ -90,11 +90,7 @@ st.markdown("""
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
-    
-    /* 配列表の文字サイズ変更と配置調整 */
-    div[data-testid="stDataFrame"] td {
-        font-size: 20px !important; 
-    }
+    div[data-testid="stDataFrame"] td { font-size: 20px !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -132,27 +128,18 @@ with all_patterns_tab:
         p_names = list(patterns.keys())
         sel_p = st.selectbox("表示する配列を選択", p_names)
         target_d = patterns[sel_p]
-        
         view_data = []
         for i in range(max(len(target_d['L']), len(target_d['R']))):
             l_v = target_d['L'][i] if i < len(target_d['L']) else None
             r_v = target_d['R'][i] if i < len(target_d['R']) else None
-            
             def get_disp(v):
                 if v is None: return ""
                 r_name = get_rarity(v)
                 if "LR" in r_name or "LLR" in r_name: return f"🌟 {r_name}"
                 return str(v)
-
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
-        
         df_display = pd.DataFrame(view_data)
-        # 左列を右詰めにするスタイルを適用
-        st.dataframe(
-            df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), 
-            use_container_width=True, 
-            hide_index=True
-        )
+        st.dataframe(df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
 
 # --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
@@ -187,30 +174,48 @@ if st.session_state.history and patterns:
                 """, unsafe_allow_html=True)
 
                 st.write("### 🔍 この配列の続きを確認")
+                # 出した番号も含めるため、orig_p から開始
+                start_l, start_r = best['orig_lp'], best['orig_rp']
                 detail_data = []
-                for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
-                    l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else None
+                # 履歴分 + 先20枚を表示
+                display_range = (best['lp'] - best['orig_lp']) + 20
+                for i in range(display_range):
+                    idx_l, idx_r = start_l + i, start_r + i
+                    l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
+                    r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
                     
                     def get_detail_disp(v):
                         if v is None: return ""
                         r_name = get_rarity(v)
-                        # レアカードなら名前を表示、それ以外は数字
                         if "LR" in r_name or "LLR" in r_name: return f"🌟 {r_name}"
                         return str(v)
 
                     detail_data.append({
-                        "枚数先": i - best['lp'] + 1,
+                        "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
                         "左": get_detail_disp(l_v),
                         "右": get_detail_disp(r_v)
                     })
-                
                 df_det = pd.DataFrame(detail_data)
-                # レア度欄を削除し、左列を右詰めにするスタイルを適用
-                st.dataframe(
-                    df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), 
-                    use_container_width=True, 
-                    hide_index=True
-                )
+                st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
+
+                st.write("### 💎 以降のレアカード一覧")
+                rare_list = []
+                for side in ["L", "R"]:
+                    current_p = best['lp'] if side == "L" else best['rp']
+                    target_list = d[side]
+                    for i in range(current_p, len(target_list)):
+                        v = target_list[i]
+                        if is_rare(v):
+                            rare_list.append({
+                                "シリンダー": "左" if side == "L" else "右",
+                                "枚数先": i - current_p + 1,
+                                "カード名": get_rarity(v)
+                            })
+                if rare_list:
+                    df_rare = pd.DataFrame(rare_list).sort_values("枚数先")
+                    st.table(df_rare)
+                else:
+                    st.write("この先にレアカードは見つかりませんでした。")
             else:
                 st.markdown('<div style="color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px;">❌ 一致なし</div>', unsafe_allow_html=True)
 
