@@ -67,37 +67,37 @@ def find_matches(history, L, R):
                                         "orig_lp": p if side=="L" else start_s, "orig_rp": start_s if side=="L" else p})
     return results
 
-# --- 4. 表生成関数（HTML直書きアプローチ） ---
+# --- 4. 表生成関数（空白排除・赤字化） ---
 def render_custom_table(df_data, height=450):
-    # 履歴にある番号を赤字にするHTML変換
     df_html = df_data.to_html(index=False, escape=False)
+    # 履歴にある番号を赤字にする
     for n in st.session_state.history:
-        # 完全一致する数字セルを置換
-        df_html = df_html.replace(f'<td>{n}</td>', f'<td><span style="color:red; font-weight:bold;">{n}</span></td>')
+        target = f'<td>{n}</td>'
+        replacement = f'<td><span style="color:red; font-weight:bold;">{n}</span></td>'
+        df_html = df_html.replace(target, replacement)
     
     html_code = f"""
-    <style>
-        .custom-container {{ height: {height}px; overflow-y: auto; border: 1px solid #ddd; margin: 0; padding: 0; }}
-        table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 20px; }}
-        th {{ position: sticky; top: 0; background: #f0f2f6; z-index: 10; border: 1px solid #eee; padding: 10px; }}
-        td {{ border: 1px solid #eee; padding: 10px; text-align: center; background: white; }}
-    </style>
-    <div class="custom-container">
+    <div style="height: {height}px; overflow-y: auto; border: 1px solid #ddd; margin-top: 5px;">
+        <style>
+            table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 18px; table-layout: fixed; }}
+            th {{ position: sticky; top: 0; background: #f0f2f6; z-index: 5; border: 1px solid #ddd; padding: 8px; }}
+            td {{ border: 1px solid #ddd; padding: 8px; text-align: center; background: white; pointer-events: none; }}
+        </style>
         {df_html}
     </div>
     """
-    st.components.v1.html(html_code, height=height + 2)
+    st.components.v1.html(html_code, height=height + 10)
 
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    [data-testid="column"] { padding: 0 !important; }
-    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; }
-    .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
-    /* エキスパンダー内の余白を極限まで削る */
-    [data-testid="stExpander"] div { padding: 0 !important; }
+    [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
+    .stButton > button { width: 100%; height: 3em; font-weight: bold; }
+    .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 18px; border-left: 5px solid #ff4b4b; }
+    /* エキスパンダー内部の余白を消去 */
+    [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -106,7 +106,7 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 入力エリア
+# 操作エリア
 with st.container():
     c_in, c_add = st.columns([1, 1])
     with c_in:
@@ -120,12 +120,12 @@ with st.container():
         if st.button("⬅️ 1個消す"):
             if st.session_state.history: st.session_state.history.pop(); st.rerun()
     with c_sub_r:
-        if st.button("🗑️ 履歴クリア"):
+        if st.button("🗑️ 履歴消去"):
             st.session_state.history = []; st.rerun()
 
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
-    st.markdown(f'<div class="history-box">出た順: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -142,11 +142,9 @@ with all_patterns_tab:
             r_v = target_d['R'][i] if i < len(target_d['R']) else None
             def get_disp(v):
                 if v is None: return ""
-                r_name = get_rarity(v)
-                return f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
+                rn = get_rarity(v)
+                return f"🌟 {rn}" if "LR" in rn or "LLR" in rn else str(v)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
-        
-        # HTML直書きで表示
         render_custom_table(pd.DataFrame(view_data))
 
 # --- 7. 解析結果表示 ---
@@ -167,4 +165,36 @@ if st.session_state.history and patterns:
 
             if hits:
                 best = hits[0]; d = patterns[best['name']]
-                nl = d['L'][best['lp']] if best
+                nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
+                nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
+                
+                st.markdown(f'<div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">'
+                            f'<div style="color: {color}; font-weight: bold; font-size: 18px;">{best["name"]} 特定</div>'
+                            f'<div style="display: flex; justify-content: space-around; margin-top: 10px;">'
+                            f'<div><div style="color:#666; font-size:12px;">左・次</div><div style="font-size:32px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:12px;">{get_rarity(nl)}</div></div>'
+                            f'<div><div style="color:#666; font-size:12px;">右・次</div><div style="font-size:32px; font-weight:bold; color:#1f77b4;">{nr}</div><div style="font-size:12px;">{get_rarity(nr)}</div></div>'
+                            f'</div></div>', unsafe_allow_html=True)
+
+                st.write("### 🔍 配列の続き")
+                start_l, start_r = best['orig_lp'], best['orig_rp']
+                detail_data = []
+                for i in range((best['lp'] - best['orig_lp']) + 20):
+                    idx_l, idx_r = start_l + i, start_r + i
+                    l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
+                    r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
+                    def get_detail_disp(v):
+                        if v is None: return ""
+                        rn = get_rarity(v)
+                        return f"🌟 {rn}" if "LR" in rn or "LLR" in rn else str(v)
+                    detail_data.append({
+                        "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
+                        "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
+                    })
+                render_custom_table(pd.DataFrame(detail_data), height=400)
+            else:
+                st.error("一致なし")
+
+    render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
+    render_result(tab_res2, (len(h)>=4), "#1f77b4")
+else:
+    st.info("番号を入力してください")
