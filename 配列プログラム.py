@@ -33,7 +33,6 @@ def load_data():
     try:
         df = pd.read_csv("配列.csv", header=None)
         patterns = {}
-        # 有効な列を判定（3行以上データがある列）
         valid_cols = [c for c in range(len(df.columns)) if pd.to_numeric(df.iloc[1:, c], errors='coerce').dropna().count() > 3]
         for i in range(0, len(valid_cols) - 1, 2):
             l_idx, r_idx = valid_cols[i], valid_cols[i+1]
@@ -70,10 +69,8 @@ def find_matches(history, L, R):
 
 # --- 4. スタイル関数 ---
 def color_red_history(val):
-    """番号が履歴に含まれるセルの文字色を赤くする"""
     if not val: return ''
     try:
-        # 文字列の中から数字の部分だけを抜き出す
         num_part = re.search(r'\d+', str(val))
         if num_part and int(num_part.group()) in st.session_state.history:
             return 'color: red; font-weight: bold;'
@@ -83,6 +80,7 @@ def color_red_history(val):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
+# CSS: 文字サイズを大きくし、左列を右詰めにする
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
@@ -92,6 +90,11 @@ st.markdown("""
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
+    
+    /* 配列表の文字サイズ変更と配置調整 */
+    div[data-testid="stDataFrame"] td {
+        font-size: 20px !important; 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -100,7 +103,6 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# --- 入力エリア ---
 with st.container():
     c_in, c_add = st.columns([1, 1], gap="small")
     with c_in:
@@ -145,8 +147,12 @@ with all_patterns_tab:
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         
         df_display = pd.DataFrame(view_data)
-        # applymap を最新の map に修正
-        st.dataframe(df_display.style.map(color_red_history), use_container_width=True, hide_index=True)
+        # 左列を右詰めにするスタイルを適用
+        st.dataframe(
+            df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), 
+            use_container_width=True, 
+            hide_index=True
+        )
 
 # --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
@@ -180,23 +186,31 @@ if st.session_state.history and patterns:
                     </div>
                 """, unsafe_allow_html=True)
 
-                # 「続きを確認」を隠さない（タブ内に直接表示）
                 st.write("### 🔍 この配列の続きを確認")
                 detail_data = []
                 for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
                     l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else None
-                    l_r = get_rarity(l_v); r_r = get_rarity(r_v)
                     
+                    def get_detail_disp(v):
+                        if v is None: return ""
+                        r_name = get_rarity(v)
+                        # レアカードなら名前を表示、それ以外は数字
+                        if "LR" in r_name or "LLR" in r_name: return f"🌟 {r_name}"
+                        return str(v)
+
                     detail_data.append({
                         "枚数先": i - best['lp'] + 1,
-                        "左": str(l_v) if l_v is not None else "", 
-                        "左レア度": f"🌟 {l_r}" if is_rare(l_v) else l_r,
-                        "右": str(r_v) if r_v is not None else "", 
-                        "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
+                        "左": get_detail_disp(l_v),
+                        "右": get_detail_disp(r_v)
                     })
+                
                 df_det = pd.DataFrame(detail_data)
-                # applymap を最新の map に修正
-                st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]), use_container_width=True, hide_index=True)
+                # レア度欄を削除し、左列を右詰めにするスタイルを適用
+                st.dataframe(
+                    df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
                 st.markdown('<div style="color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px;">❌ 一致なし</div>', unsafe_allow_html=True)
 
