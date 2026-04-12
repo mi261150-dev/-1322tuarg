@@ -12,7 +12,7 @@ def get_rarity(n):
             1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
             26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
             55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3",
-            101:"パラレルLLR ドーン"
+            101:"ランダムパラレルLLR"  # 修正：パラレルLLRドーン → ランダムパラレルLLR
         }
         if n in names: return names[n]
         rarities = {
@@ -103,12 +103,13 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; min-height: 50px; }
     
-    /* 番号入力欄を白背景・黒文字にする */
+    /* 入力欄：白背景、黒太文字で見やすく */
     div[data-testid="stNumberInput"] input {
-        background-color: white !important;
-        color: black !important;
-        caret-color: black !important;
-        font-weight: bold !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        caret-color: #000000 !important;
+        font-weight: 900 !important;
+        font-size: 20px !important;
     }
     
     .half-width-container { width: 50% !important; min-width: 200px; }
@@ -126,16 +127,15 @@ if 'reset_counter' not in st.session_state: st.session_state.reset_counter = 0
 
 patterns = load_data()
 
-# --- 履歴 (常時表示) ---
+# --- 出たカード (履歴) ---
 hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
 display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
-st.markdown(f'<div class="history-box">履歴: {display_text}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', unsafe_allow_html=True) # 修正：履歴 → 出たカード
 
-# 履歴と入力欄の間に一行空ける
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
-st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", 
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="ここに番号を入力...", # 修正：プレースホルダー変更
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
 # --- ボタン列 (横幅半分) ---
@@ -180,7 +180,8 @@ with all_patterns_tab:
 if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
-    tab_res1, tab_res2 = st.tabs(["① 4枚一致探索", "② レア探索"])
+    # 修正：４枚一致検索 → ４枚のカードから検索
+    tab_res1, tab_res2 = st.tabs(["① ４枚のカードから検索", "② レア探索"])
 
     def render_result(tab_obj, active_req, color):
         with tab_obj:
@@ -249,8 +250,9 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 配列のぞき見早見表 (最下部・特定ボタンなし・レア出現タブ付) ---
-peek_expander = st.expander("👁 配列のぞき見早見表 (末尾レアカード)")
+# --- 8. 👀配列のぞき見用 ---
+# 修正：👁 配列のぞき見早見表 (末尾レアカード）→ 👀配列のぞき見用
+peek_expander = st.expander("👀配列のぞき見用")
 with peek_expander:
     if patterns:
         for p_name, data in patterns.items():
