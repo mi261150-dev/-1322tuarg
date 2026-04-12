@@ -138,13 +138,13 @@ patterns = load_data()
 
 # --- 出たカード (履歴表示) ---
 hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
-display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
+display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'></span>"
 st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
-st.number_input("番号", min_value=1, max_value=110, value=None, placeholder=".", 
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="ここに番号を入力...", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
 # --- ボタン列 (横幅半分) ---
