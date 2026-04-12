@@ -26,6 +26,11 @@ def is_rare(n):
     r = get_rarity(n)
     return any(x in r for x in ["LR", "LLR", "SR", "CP"])
 
+# 特定レアのみ（LR, LLR, パラレル）の判定
+def is_target_rare(n):
+    r = get_rarity(n)
+    return any(x in r for x in ["LR", "LLR"])
+
 # --- 2. データ読み込み ---
 @st.cache_data
 def load_data():
@@ -93,6 +98,14 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
+    /* スマホでボタンを横並びに強制 */
+    [data-testid="column"] {
+        flex-direction: row !important;
+        display: flex !important;
+        gap: 5px !important;
+    }
+    [data-testid="column"] > div { width: 33% !important; }
+    
     .stButton > button { width: 100%; height: 3.5em; font-weight: bold; font-size: 14px; padding: 0 !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; }
     [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
@@ -104,17 +117,18 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# スマホ向けボタン横並びレイアウト
+# 番号入力
 num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
 
-col1, col2, col3 = st.columns(3)
-with col1:
+# 強制横並びボタン
+col_btns = st.columns(3)
+with col_btns[0]:
     if st.button("✅確定"):
         st.session_state.history.append(int(num)); st.rerun()
-with col2:
+with col_btns[1]:
     if st.button("⬅️1消す"):
         if st.session_state.history: st.session_state.history.pop(); st.rerun()
-with col3:
+with col_btns[2]:
     if st.button("🗑️消去"):
         st.session_state.history = []; st.rerun()
 
@@ -163,31 +177,31 @@ if st.session_state.history and patterns:
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
                 
-                st.markdown(f'<div style="border: 2px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">'
-                            f'<div style="color: {color}; font-weight: bold;">{best["name"]} 特定</div>'
-                            f'<div style="display: flex; justify-content: space-around; margin-top: 5px;">'
-                            f'<div><div style="color:#666; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:10px;">{get_rarity(nl)}</div></div>'
-                            f'<div><div style="color:#666; font-size:10px;">右・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nr}</div><div style="font-size:10px;">{get_rarity(nr)}</div></div>'
-                            f'</div></div>', unsafe_allow_html=True)
-
-                # --- 未来のレアカード表示 ---
-                st.write("### 💎 以降のレアカード予測")
-                future_rares = []
+                # 枠内のレア予測テキスト生成
+                future_texts = []
                 for side in ["L", "R"]:
                     curr_pos = best['lp'] if side == "L" else best['rp']
                     track = d[side]
                     for i in range(curr_pos, len(track)):
                         val = track[i]
-                        if is_rare(val):
-                            future_rares.append({
-                                "シリンダー": "左" if side == "L" else "右",
-                                "枚数先": f"{i - curr_pos + 1}枚目",
-                                "レア名称": get_rarity(val)
-                            })
-                if future_rares:
-                    st.table(pd.DataFrame(future_rares).sort_values("枚数先"))
-                else:
-                    st.write("この先にレアはありません")
+                        if is_target_rare(val):
+                            future_texts.append(f"💎 {i - curr_pos + 1}枚先: {get_rarity(val)}")
+                
+                rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
+
+                st.markdown(f"""
+                    <div style="border: 3px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">
+                        <div style="color: {color}; font-weight: bold; font-size: 18px;">{best['name']} 特定</div>
+                        <div style="display: flex; justify-content: space-around; margin-top: 5px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                            <div><div style="color:#666; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:10px;">{get_rarity(nl)}</div></div>
+                            <div><div style="color:#666; font-size:10px;">右・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nr}</div><div style="font-size:10px;">{get_rarity(nr)}</div></div>
+                        </div>
+                        <div style="margin-top: 10px; text-align: left; font-size: 13px; color: #333;">
+                            <strong>🔜 以降のLR/LLR予測:</strong><br>
+                            {rare_predict_html}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
                 st.write("### 🔍 配列の続き")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
