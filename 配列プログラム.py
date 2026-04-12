@@ -94,7 +94,6 @@ def render_custom_table(df_data, height=450):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
-# 虹色点滅アニメーションと配置CSS
 st.markdown("""
     <style>
     @keyframes rainbow {
@@ -106,9 +105,7 @@ st.markdown("""
         83% { background-color: #bdb2ff; }
         100% { background-color: #ffadad; }
     }
-    .stApp {
-        animation: rainbow 5s infinite;
-    }
+    .stApp { animation: rainbow 5s infinite; }
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     div[data-testid="stHorizontalBlock"] {
@@ -131,16 +128,13 @@ if 'reset_counter' not in st.session_state: st.session_state.reset_counter = 0
 
 patterns = load_data()
 
-# --- 履歴 ---
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
-# --- 番号入力 ---
 st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
-# --- ボタン列 ---
 c1, c2 = st.columns(2)
 with c1:
     if st.button("確定", use_container_width=True):
@@ -172,4 +166,38 @@ with all_patterns_tab:
             def get_disp(v):
                 if v is None: return ""
                 rn = get_rarity(v)
-                return f"🌟 {rn}" if "LR" in rn or "LLR
+                return f"🌟 {rn}" if ("LR" in rn or "LLR" in rn) else str(v)
+            view_data.append({"No.": i+1, "左": get_disp(l_v), "右": get_disp(r_v)})
+        render_custom_table(pd.DataFrame(view_data))
+
+# --- 7. 解析結果表示 ---
+if st.session_state.history and patterns:
+    h = st.session_state.history
+    has_rare = any(is_rare(n) for n in h)
+    tab_res1, tab_res2 = st.tabs(["① 4枚一致探索", "② レア探索"])
+
+    def render_result(tab_obj, active_req, color):
+        with tab_obj:
+            if not active_req:
+                st.warning("枚数不足")
+                return
+            hits = []
+            for name, data in patterns.items():
+                res = find_matches(h, data["L"], data["R"])
+                for ht in res: hits.append({**ht, "name": name})
+
+            if hits:
+                best = hits[0]; d = patterns[best['name']]
+                nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
+                nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
+                
+                future_rares = []
+                for side in ["L", "R"]:
+                    curr_pos = best['lp'] if side == "L" else best['rp']
+                    track = d[side]
+                    for i in range(curr_pos, len(track)):
+                        val = track[i]
+                        if is_target_rare(val):
+                            future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
+                
+                future_
