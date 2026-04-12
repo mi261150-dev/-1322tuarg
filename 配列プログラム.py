@@ -1,18 +1,33 @@
 import streamlit as st
 import pandas as pd
 
-# --- 1. 内部判定 & 色定義 ---
-def get_color_and_rarity(n):
-    if not n: return "#FFFFFF", "N"
+# --- 1. 名称・色・判定定義 ---
+def get_card_display(n):
+    if not n: return ""
     try:
         n = int(n)
-        # LLR: 金, LR: 赤, SR: 黄, CP: 青, その他: 白
-        if n in [7, 26, 61]: return "#FFD700", "LLR"
-        if n in [1, 16, 18, 27, 36, 48, 55, 58, 99]: return "#FF4B4B", "LR"
-        if n in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63, 98]: return "#FFFF00", "SR"
-        if 64 <= n <= 77: return "#1E90FF", "CP"
-        return "#FFFFFF", "N"
-    except: return "#FFFFFF", "N"
+        # レアカードのみ名称を定義
+        names = {
+            1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
+            26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
+            55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3"
+        }
+        # 名称がある場合は「番号 名称」、ない場合は「番号」のみ返す
+        if n in names:
+            return f"{n} {names[n]}"
+        return str(n)
+    except: return ""
+
+def get_color_and_rarity(n):
+    if not n: return "#FFFFFF"
+    try:
+        n = int(n)
+        if n in [7, 26, 61]: return "#FFD700" # LLR
+        if n in [1, 16, 18, 27, 36, 48, 55, 58, 99]: return "#FF4B4B" # LR
+        if n in [5, 20, 24, 25, 31, 33, 38, 40, 42, 46, 52, 63, 98]: return "#FFFF00" # SR
+        if 64 <= n <= 77: return "#1E90FF" # CP
+        return "#FFFFFF"
+    except: return "#FFFFFF"
 
 # --- 2. データ読み込み ---
 @st.cache_data
@@ -92,7 +107,7 @@ with st.container():
 if st.session_state.history:
     hist_html = []
     for n in st.session_state.history:
-        color, _ = get_color_and_rarity(n)
+        color = get_color_and_rarity(n)
         hist_html.append(f'<span style="color:{color}; font-weight:bold;">{n}</span>')
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
@@ -108,8 +123,10 @@ with all_patterns_exp:
         for i in range(max(len(target_d['L']), len(target_d['R']))):
             l_v = target_d['L'][i] if i < len(target_d['L']) else ""
             r_v = target_d['R'][i] if i < len(target_d['R']) else ""
-            l_disp = f"⭐ {l_v}" if l_v in st.session_state.history else str(l_v)
-            r_disp = f"⭐ {r_v}" if r_v in st.session_state.history else str(r_v)
+            l_txt = get_card_display(l_v)
+            r_txt = get_card_display(r_v)
+            l_disp = f"⭐ {l_txt}" if l_v in st.session_state.history else l_txt
+            r_disp = f"⭐ {r_txt}" if r_v in st.session_state.history else r_txt
             view_list.append({"左": l_disp, "右": r_disp})
         st.dataframe(pd.DataFrame(view_list), use_container_width=True, hide_index=True)
 
@@ -131,8 +148,8 @@ if st.session_state.history and patterns:
                 best = hits[0]; d = patterns[best['name']]
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
-                color_l, _ = get_color_and_rarity(nl)
-                color_r, _ = get_color_and_rarity(nr)
+                color_l = get_color_and_rarity(nl)
+                color_r = get_color_and_rarity(nr)
                 
                 st.markdown(f"""
                     <div style="border: 3px solid {border_color}; padding: 20px; border-radius: 15px; text-align: center; background: white;">
@@ -149,7 +166,10 @@ if st.session_state.history and patterns:
                     detail_data = []
                     for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
                         l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
-                        detail_data.append({"左": l_v, "右": r_v})
+                        detail_data.append({
+                            "左": get_card_display(l_v),
+                            "右": get_card_display(r_v)
+                        })
                     st.table(detail_data)
             else:
                 st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
