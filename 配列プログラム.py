@@ -149,7 +149,8 @@ with all_patterns_tab:
                 return str(v)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         df_display = pd.DataFrame(view_data)
-        st.dataframe(df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True, on_select=None)
+        # on_select=None を削除してエラー回避
+        st.dataframe(df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
 
 # --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
@@ -202,7 +203,8 @@ if st.session_state.history and patterns:
                         "右": get_detail_disp(r_v)
                     })
                 df_det = pd.DataFrame(detail_data)
-                st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True, on_select=None)
+                # ここも on_select=None を削除
+                st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
 
                 st.write("### 💎 以降のレアカード一覧")
                 rare_list = []
