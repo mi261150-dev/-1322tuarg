@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import re
@@ -81,6 +82,7 @@ def color_red_history(val):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
+# CSS: スクロール以外のツールバー（ダウンロード等）を強制非表示
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
@@ -90,6 +92,12 @@ st.markdown("""
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
+    
+    /* データフレームのツールバー（保存・ダウンロード・検索）を非表示 */
+    [data-testid="stElementToolbar"] {
+        display: none !important;
+    }
+    
     div[data-testid="stDataFrame"] td { font-size: 20px !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -139,7 +147,11 @@ with all_patterns_tab:
                 return str(v)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         df_display = pd.DataFrame(view_data)
-        st.dataframe(df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
+        st.dataframe(
+            df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), 
+            use_container_width=True, 
+            hide_index=True
+        )
 
 # --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
@@ -174,10 +186,8 @@ if st.session_state.history and patterns:
                 """, unsafe_allow_html=True)
 
                 st.write("### 🔍 この配列の続きを確認")
-                # 出した番号も含めるため、orig_p から開始
                 start_l, start_r = best['orig_lp'], best['orig_rp']
                 detail_data = []
-                # 履歴分 + 先20枚を表示
                 display_range = (best['lp'] - best['orig_lp']) + 20
                 for i in range(display_range):
                     idx_l, idx_r = start_l + i, start_r + i
@@ -196,7 +206,11 @@ if st.session_state.history and patterns:
                         "右": get_detail_disp(r_v)
                     })
                 df_det = pd.DataFrame(detail_data)
-                st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
+                st.dataframe(
+                    df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
 
                 st.write("### 💎 以降のレアカード一覧")
                 rare_list = []
@@ -213,6 +227,7 @@ if st.session_state.history and patterns:
                             })
                 if rare_list:
                     df_rare = pd.DataFrame(rare_list).sort_values("枚数先")
+                    # st.tableは標準でツールバーがないためそのまま使用
                     st.table(df_rare)
                 else:
                     st.write("この先にレアカードは見つかりませんでした。")
