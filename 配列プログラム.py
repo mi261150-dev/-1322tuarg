@@ -67,10 +67,9 @@ def find_matches(history, L, R):
                                         "orig_lp": p if side=="L" else start_s, "orig_rp": start_s if side=="L" else p})
     return results
 
-# --- 4. 表生成関数（空白排除・赤字化） ---
+# --- 4. 表生成関数 ---
 def render_custom_table(df_data, height=450):
     df_html = df_data.to_html(index=False, escape=False)
-    # 履歴にある番号を赤字にする
     for n in st.session_state.history:
         target = f'<td>{n}</td>'
         replacement = f'<td><span style="color:red; font-weight:bold;">{n}</span></td>'
@@ -79,7 +78,7 @@ def render_custom_table(df_data, height=450):
     html_code = f"""
     <div style="height: {height}px; overflow-y: auto; border: 1px solid #ddd; margin-top: 5px;">
         <style>
-            table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 18px; table-layout: fixed; }}
+            table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 16px; table-layout: fixed; }}
             th {{ position: sticky; top: 0; background: #f0f2f6; z-index: 5; border: 1px solid #ddd; padding: 8px; }}
             td {{ border: 1px solid #ddd; padding: 8px; text-align: center; background: white; pointer-events: none; }}
         </style>
@@ -93,10 +92,9 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    [data-testid="stVerticalBlock"] { gap: 0.5rem !important; }
-    .stButton > button { width: 100%; height: 3em; font-weight: bold; }
-    .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 18px; border-left: 5px solid #ff4b4b; }
-    /* エキスパンダー内部の余白を消去 */
+    [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
+    .stButton > button { width: 100%; height: 3.5em; font-weight: bold; font-size: 14px; padding: 0 !important; }
+    .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; }
     [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -106,22 +104,19 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 操作エリア
-with st.container():
-    c_in, c_add = st.columns([1, 1])
-    with c_in:
-        num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
-    with c_add:
-        if st.button("✅ 確定"):
-            st.session_state.history.append(int(num)); st.rerun()
+# スマホ向けボタン横並びレイアウト
+num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
 
-    c_sub_l, c_sub_r = st.columns(2)
-    with c_sub_l:
-        if st.button("⬅️ 1個消す"):
-            if st.session_state.history: st.session_state.history.pop(); st.rerun()
-    with c_sub_r:
-        if st.button("🗑️ 履歴消去"):
-            st.session_state.history = []; st.rerun()
+col1, col2, col3 = st.columns(3)
+with col1:
+    if st.button("✅確定"):
+        st.session_state.history.append(int(num)); st.rerun()
+with col2:
+    if st.button("⬅️1消す"):
+        if st.session_state.history: st.session_state.history.pop(); st.rerun()
+with col3:
+    if st.button("🗑️消去"):
+        st.session_state.history = []; st.rerun()
 
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
@@ -130,7 +125,7 @@ if st.session_state.history:
 st.divider()
 
 # --- 6. 全配列表表示 ---
-all_patterns_tab = st.expander("📊 すべての配列表データを見る")
+all_patterns_tab = st.expander("📊 全データ確認")
 with all_patterns_tab:
     if patterns:
         p_names = list(patterns.keys())
@@ -151,7 +146,7 @@ with all_patterns_tab:
 if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
-    tab_res1, tab_res2 = st.tabs(["① レアあり探索", "② 4枚一致探索"])
+    tab_res1, tab_res2 = st.tabs(["レアあり探索", "4枚一致探索"])
 
     def render_result(tab_obj, active_req, color):
         with tab_obj:
@@ -168,12 +163,31 @@ if st.session_state.history and patterns:
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
                 
-                st.markdown(f'<div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">'
-                            f'<div style="color: {color}; font-weight: bold; font-size: 18px;">{best["name"]} 特定</div>'
-                            f'<div style="display: flex; justify-content: space-around; margin-top: 10px;">'
-                            f'<div><div style="color:#666; font-size:12px;">左・次</div><div style="font-size:32px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:12px;">{get_rarity(nl)}</div></div>'
-                            f'<div><div style="color:#666; font-size:12px;">右・次</div><div style="font-size:32px; font-weight:bold; color:#1f77b4;">{nr}</div><div style="font-size:12px;">{get_rarity(nr)}</div></div>'
+                st.markdown(f'<div style="border: 2px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">'
+                            f'<div style="color: {color}; font-weight: bold;">{best["name"]} 特定</div>'
+                            f'<div style="display: flex; justify-content: space-around; margin-top: 5px;">'
+                            f'<div><div style="color:#666; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:10px;">{get_rarity(nl)}</div></div>'
+                            f'<div><div style="color:#666; font-size:10px;">右・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nr}</div><div style="font-size:10px;">{get_rarity(nr)}</div></div>'
                             f'</div></div>', unsafe_allow_html=True)
+
+                # --- 未来のレアカード表示 ---
+                st.write("### 💎 以降のレアカード予測")
+                future_rares = []
+                for side in ["L", "R"]:
+                    curr_pos = best['lp'] if side == "L" else best['rp']
+                    track = d[side]
+                    for i in range(curr_pos, len(track)):
+                        val = track[i]
+                        if is_rare(val):
+                            future_rares.append({
+                                "シリンダー": "左" if side == "L" else "右",
+                                "枚数先": f"{i - curr_pos + 1}枚目",
+                                "レア名称": get_rarity(val)
+                            })
+                if future_rares:
+                    st.table(pd.DataFrame(future_rares).sort_values("枚数先"))
+                else:
+                    st.write("この先にレアはありません")
 
                 st.write("### 🔍 配列の続き")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
@@ -190,7 +204,7 @@ if st.session_state.history and patterns:
                         "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
                         "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
                     })
-                render_custom_table(pd.DataFrame(detail_data), height=400)
+                render_custom_table(pd.DataFrame(detail_data), height=350)
             else:
                 st.error("一致なし")
 
