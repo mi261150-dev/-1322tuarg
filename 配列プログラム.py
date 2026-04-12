@@ -94,11 +94,25 @@ def render_custom_table(df_data, height=450):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
+# スマホ横並び強制用スタイル
 st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; }
     [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
+    
+    /* ボタン横並びアプローチ */
+    div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        width: 100% !important;
+        gap: 5px !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div {
+        width: 33% !important;
+        flex: none !important;
+    }
+    .stButton > button { width: 100%; height: 3.5em; font-weight: bold; font-size: 14px; padding: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -110,47 +124,7 @@ patterns = load_data()
 # 番号入力
 num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
 
-# --- ボタン部分をHTML/JSで実装（強制横並び） ---
-# Streamlitの値を更新するための隠しボタンを準備
-if st.button("update", key="hidden_update", help="invisible", label_visibility="collapsed"):
-    pass
-
-btn_html = f"""
-<div style="display: flex; gap: 5px; width: 100%;">
-    <button onclick="parent.window.postMessage({{type: 'btn', val: 'add'}}, '*')" style="flex: 1; height: 3.5em; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;">✅確定</button>
-    <button onclick="parent.window.postMessage({{type: 'btn', val: 'back'}}, '*')" style="flex: 1; height: 3.5em; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;">⬅️1消す</button>
-    <button onclick="parent.window.postMessage({{type: 'btn', val: 'clear'}}, '*')" style="flex: 1; height: 3.5em; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;">🗑️消去</button>
-</div>
-<script>
-    const streamlitDoc = window.parent.document;
-    window.addEventListener('message', function(e) {{
-        if(e.data.type === 'btn') {{
-            const btns = streamlitDoc.querySelectorAll('button');
-            if(e.data.val === 'add') {{
-                // 確定の挙動をシミュレート（実際はStreamlitのコールバックが必要なため、SessionState経由で制御）
-                window.parent.postMessage('streamlit:set_component_value', '*');
-            }}
-        }}
-    }});
-</script>
-"""
-# 上記は複雑化を避けるため、既存のst.columnsをCSSで強制制御するアプローチに戻しつつ、さらに強力なスタイルを適用
-st.markdown("""
-    <style>
-    div[data-testid="column"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        justify-content: space-between !important;
-        width: 100% !important;
-    }
-    div[data-testid="column"] > div {
-        flex: 1 1 0% !important;
-        min-width: 0 !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
+# ボタン配置（CSSで制御）
 col_btns = st.columns(3)
 with col_btns[0]:
     if st.button("✅確定"):
@@ -191,7 +165,7 @@ if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
     
-    # タブの入れ替え
+    # タブ順序: ①4枚一致, ②レア探索
     tab_res1, tab_res2 = st.tabs(["① 4枚一致探索", "② レア探索"])
 
     def render_result(tab_obj, active_req, color):
@@ -209,7 +183,7 @@ if st.session_state.history and patterns:
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
                 
-                # レア予測（近い順にソート）
+                # レア予測（近い順）
                 future_rares = []
                 for side in ["L", "R"]:
                     curr_pos = best['lp'] if side == "L" else best['rp']
@@ -219,7 +193,6 @@ if st.session_state.history and patterns:
                         if is_target_rare(val):
                             future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
                 
-                # 近い順に並び替え
                 future_rares = sorted(future_rares, key=lambda x: x['dist'])
                 future_texts = [f"💎 {r['dist']}枚先: {r['name']}" for r in future_rares]
                 rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
@@ -241,9 +214,11 @@ if st.session_state.history and patterns:
                 st.write("### 🔍 配列の続き")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
                 
-                # その配列の「最後のレア」まで表示範囲を拡張
-                max_pos_l = max([i for i, v in enumerate(d['L']) if is_rare(v)] + [best['lp']])
-                max_pos_r = max([i for i, v in enumerate(d['R']) if is_rare(v)] + [best['rp']])
+                # 配列内の最後のレアまで表示範囲を拡張
+                rare_indices_l = [i for i, v in enumerate(d['L']) if is_rare(v)]
+                rare_indices_r = [i for i, v in enumerate(d['R']) if is_rare(v)]
+                max_pos_l = max(rare_indices_l) if rare_indices_l else best['lp']
+                max_pos_r = max(rare_indices_r) if rare_indices_r else best['rp']
                 last_rare_dist = max(max_pos_l - start_l, max_pos_r - start_r)
                 display_range = last_rare_dist + 1
 
