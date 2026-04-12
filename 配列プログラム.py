@@ -14,7 +14,6 @@ def get_rarity(n):
             101:"パラレルLLR ドーン"
         }
         if n in names: return names[n]
-
         rarities = {
             99:"ランダムLR", 98:"ランダムSR",
             5:"SR", 20:"SR", 24:"SR", 25:"SR", 31:"SR", 33:"SR", 38:"SR", 40:"SR", 42:"SR", 46:"SR", 52:"SR", 63:"SR"
@@ -68,40 +67,37 @@ def find_matches(history, L, R):
                                         "orig_lp": p if side=="L" else start_s, "orig_rp": start_s if side=="L" else p})
     return results
 
-# --- 4. 赤字変換ロジック ---
-def highlight_numbers(val):
-    if not val: return ""
-    str_val = str(val)
-    num_match = re.search(r'\d+', str_val)
-    if num_match:
-        if int(num_match.group()) in st.session_state.history:
-            return f'<span style="color:red; font-weight:bold;">{str_val}</span>'
-    return str_val
+# --- 4. 表生成関数（HTML直書きアプローチ） ---
+def render_custom_table(df_data, height=450):
+    # 履歴にある番号を赤字にするHTML変換
+    df_html = df_data.to_html(index=False, escape=False)
+    for n in st.session_state.history:
+        # 完全一致する数字セルを置換
+        df_html = df_html.replace(f'<td>{n}</td>', f'<td><span style="color:red; font-weight:bold;">{n}</span></td>')
+    
+    html_code = f"""
+    <style>
+        .custom-container {{ height: {height}px; overflow-y: auto; border: 1px solid #ddd; margin: 0; padding: 0; }}
+        table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 20px; }}
+        th {{ position: sticky; top: 0; background: #f0f2f6; z-index: 10; border: 1px solid #eee; padding: 10px; }}
+        td {{ border: 1px solid #eee; padding: 10px; text-align: center; background: white; }}
+    </style>
+    <div class="custom-container">
+        {df_html}
+    </div>
+    """
+    st.components.v1.html(html_code, height=height + 2)
 
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
-    div[data-testid="column"] { display: flex; align-items: flex-end; }
-    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; margin-bottom: 2px; }
-    .stNumberInput input { height: 3.2em !important; }
-    .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
-    .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
+    [data-testid="column"] { padding: 0 !important; }
+    .stButton > button { width: 100%; height: 3.2em; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
-    
-    /* 謎の空白を消すための追加設定 */
-    .stSelectbox { margin-bottom: -20px !important; } /* セレクトボックス下の余白を削る */
-    [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0rem !important; } /* 要素間の隙間をゼロに */
-
-    /* スクロールエリア */
-    .scroll-box { height: 450px; overflow-y: auto; border: 1px solid #ddd; margin-top: 10px; }
-    
-    /* テーブルスタイル */
-    .scroll-box table { width: 100% !important; font-size: 20px !important; border-collapse: collapse; margin-bottom: 0px !important; }
-    .scroll-box th { background-color: #f0f2f6 !important; pointer-events: none !important; text-align: center !important; border: 1px solid #eee !important; padding: 8px !important; }
-    .scroll-box td { padding: 8px !important; border: 1px solid #eee !important; text-align: center !important; pointer-events: none !important; }
+    /* エキスパンダー内の余白を極限まで削る */
+    [data-testid="stExpander"] div { padding: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -110,25 +106,26 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
+# 入力エリア
 with st.container():
-    c_in, c_add = st.columns([1, 1], gap="small")
+    c_in, c_add = st.columns([1, 1])
     with c_in:
-        num = st.number_input("番号入力", min_value=1, max_value=110, value=1, step=1, label_visibility="collapsed")
+        num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
     with c_add:
-        if st.button("✅ 上の番号で確定"):
+        if st.button("✅ 確定"):
             st.session_state.history.append(int(num)); st.rerun()
 
-    c_sub_l, c_sub_r = st.columns(2, gap="small")
+    c_sub_l, c_sub_r = st.columns(2)
     with c_sub_l:
         if st.button("⬅️ 1個消す"):
             if st.session_state.history: st.session_state.history.pop(); st.rerun()
     with c_sub_r:
-        if st.button("🗑️ 履歴を消す"):
+        if st.button("🗑️ 履歴クリア"):
             st.session_state.history = []; st.rerun()
 
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
-    st.markdown(f'<div class="history-box">出たカード: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="history-box">出た順: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -137,7 +134,7 @@ all_patterns_tab = st.expander("📊 すべての配列表データを見る")
 with all_patterns_tab:
     if patterns:
         p_names = list(patterns.keys())
-        sel_p = st.selectbox("表示する配列を選択", p_names, label_visibility="collapsed")
+        sel_p = st.selectbox("配列選択", p_names, label_visibility="collapsed")
         target_d = patterns[sel_p]
         view_data = []
         for i in range(max(len(target_d['L']), len(target_d['R']))):
@@ -146,14 +143,11 @@ with all_patterns_tab:
             def get_disp(v):
                 if v is None: return ""
                 r_name = get_rarity(v)
-                txt = f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
-                return highlight_numbers(txt)
+                return f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         
-        # 不要な余白を生む要因を排除
-        st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-        st.markdown(pd.DataFrame(view_data).to_html(index=False, escape=False), unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        # HTML直書きで表示
+        render_custom_table(pd.DataFrame(view_data))
 
 # --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
@@ -173,56 +167,4 @@ if st.session_state.history and patterns:
 
             if hits:
                 best = hits[0]; d = patterns[best['name']]
-                nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
-                nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
-                
-                st.markdown(f'<div style="border: 3px solid {color}; padding: 20px; border-radius: 15px; text-align: center; background: white; margin-bottom: 20px;">'
-                            f'<div style="color: {color}; font-weight: bold;">{best["name"]} 特定</div>'
-                            f'<div style="display: flex; justify-content: space-around; margin-top: 15px;">'
-                            f'<div><div style="color: #666;">左・次</div><div class="next-num">{nl}</div><div class="rarity-tag">{get_rarity(nl)}</div></div>'
-                            f'<div style="border-left: 1px solid #ddd;"></div>'
-                            f'<div><div style="color: #666;">右・次</div><div class="next-num">{nr}</div><div class="rarity-tag">{get_rarity(nr)}</div></div>'
-                            f'</div></div>', unsafe_allow_html=True)
-
-                st.write("### 🔍 この配列の続きを確認")
-                start_l, start_r = best['orig_lp'], best['orig_rp']
-                detail_data = []
-                display_range = (best['lp'] - best['orig_lp']) + 20
-                for i in range(display_range):
-                    idx_l, idx_r = start_l + i, start_r + i
-                    l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
-                    r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
-                    def get_detail_disp(v):
-                        if v is None: return ""
-                        r_name = get_rarity(v)
-                        txt = f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
-                        return highlight_numbers(txt)
-
-                    detail_data.append({
-                        "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
-                        "左": get_detail_disp(l_v),
-                        "右": get_detail_disp(r_v)
-                    })
-                
-                st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-                st.markdown(pd.DataFrame(detail_data).to_html(index=False, escape=False), unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-                st.write("### 💎 以降のレアカード一覧")
-                rare_list = []
-                for side in ["L", "R"]:
-                    current_p = best['lp'] if side == "L" else best['rp']
-                    target_list = d[side]
-                    for i in range(current_p, len(target_list)):
-                        v = target_list[i]
-                        if is_rare(v):
-                            rare_list.append({"シリンダー": "左" if side == "L" else "右", "枚数先": i - current_p + 1, "カード名": get_rarity(v)})
-                if rare_list:
-                    st.table(pd.DataFrame(rare_list).sort_values("枚数先"))
-            else:
-                st.markdown('<div style="color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px;">❌ 一致なし</div>', unsafe_allow_html=True)
-
-    render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
-    render_result(tab_res2, (len(h)>=4), "#1f77b4")
-else:
-    st.info("カード番号を入力してください")
+                nl = d['L'][best['lp']] if best
