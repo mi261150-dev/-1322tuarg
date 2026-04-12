@@ -225,4 +225,62 @@ if st.session_state.history and patterns:
                     r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
                     def get_detail_disp(v):
                         if v is None: return ""
-                        rn
+                        rn = get_rarity(v)
+                        return f"🌟 {rn}" if ("LR" in rn or "LLR" in rn) else str(v)
+                    detail_data.append({
+                        "No.": idx_l + 1,
+                        "枚数": "現在" if idx_l < best['lp'] and idx_r < best['rp'] else f"{max(0, idx_l - best['lp'] + 1, idx_r - best['rp'] + 1)}枚先",
+                        "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
+                    })
+                render_custom_table(pd.DataFrame(detail_data), height=400)
+            else:
+                st.error("一致なし")
+
+    render_result(tab_res1, (len(h)>=4), "#60b4ff")
+    render_result(tab_res2, (has_rare and len(h)>=2), "#ff4b4b")
+
+st.divider()
+
+# --- 8. 新項目：配列のぞき見早見表 (最下部に配置・スマホ縦並び対応) ---
+st.subheader("👁 配列のぞき見早見表")
+if patterns:
+    for p_name, data in patterns.items():
+        # 各配列ごとに枠を作成
+        with st.container():
+            st.markdown(f"#### {p_name}")
+            col_l, col_r = st.columns(2)
+            
+            # 左(L)の最初と最後のカード
+            l_first = data["L"][0]
+            l_last = data["L"][-1]
+            
+            with col_l:
+                # 左の画像
+                img_path = f"images/{l_first}.jpg"
+                if os.path.exists(img_path):
+                    st.image(img_path, caption=f"最初: No.{l_first}", use_container_width=True)
+                else:
+                    st.info(f"左始: No.{l_first} ({get_rarity(l_first)})")
+                
+                if st.button(f"左始で特定", key=f"btn_l_{p_name}"):
+                    st.session_state.history = [l_first]
+                    st.rerun()
+
+            with col_r:
+                # 右の画像 (データ構造上、R側の最初を表示)
+                r_first = data["R"][0]
+                img_path_r = f"images/{r_first}.jpg"
+                if os.path.exists(img_path_r):
+                    st.image(img_path_r, caption=f"最初(右): No.{r_first}", use_container_width=True)
+                else:
+                    st.info(f"右始: No.{r_first} ({get_rarity(r_first)})")
+                
+                if st.button(f"右始で特定", key=f"btn_r_{p_name}"):
+                    st.session_state.history = [r_first]
+                    st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
+else:
+    st.info("データが読み込めていません。")
+
+if not st.session_state.history:
+    st.info("番号を入力してください")
