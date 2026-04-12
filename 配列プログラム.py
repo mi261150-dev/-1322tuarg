@@ -114,7 +114,6 @@ st.markdown("""
 st.title("VR-1弾配列サーチ")
 
 if 'history' not in st.session_state: st.session_state.history = []
-# 検索窓リセット用のカウンター
 if 'reset_counter' not in st.session_state: st.session_state.reset_counter = 0
 
 patterns = load_data()
@@ -124,7 +123,7 @@ if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
-# --- 番号入力 (keyにカウンターを混ぜて強制リセット可能にする) ---
+# --- 番号入力 ---
 st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
@@ -136,7 +135,6 @@ with c1:
         input_val = st.session_state.get(input_key)
         if input_val is not None:
             st.session_state.history.append(int(input_val))
-            # カウンターを増やすことで、次の描画時にnumber_inputを「新品」の状態（空）にする
             st.session_state.reset_counter += 1
             st.rerun()
 with c2:
@@ -200,9 +198,48 @@ if st.session_state.history and patterns:
                 future_texts = [f"💎 {r['dist']}枚先: {r['name']}" for r in future_rares]
                 rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
 
+                # SyntaxErrorの原因となりやすい箇所を修正
                 st.markdown(f"""
-                    <div style="border: 3px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">
-                        <div style="color: {color}; font-weight: bold; font-size: 18px;">{best['name']} 特定</div>
-                        <div style="display: flex; justify-content: space-around; margin-top: 5px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                            <div><div style="color:#666; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:10px;">{get_rarity(nl)}</div></div>
-                            <div><div style="color:#666; font-size
+<div style="border: 3px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">
+    <div style="color: {color}; font-weight: bold; font-size: 18px;">{best['name']} 特定</div>
+    <div style="display: flex; justify-content: space-around; margin-top: 5px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+        <div><div style="color:#666; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:10px;">{get_rarity(nl)}</div></div>
+        <div><div style="color:#666; font-size:10px;">右・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nr}</div><div style="font-size:10px;">{get_rarity(nr)}</div></div>
+    </div>
+    <div style="margin-top: 10px; text-align: left; font-size: 13px; color: #333;">
+        <strong>🔜 以降のLR/LLR予測:</strong><br>
+        {rare_predict_html}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+                st.write("### 🔍 配列の続き")
+                start_l, start_r = best['orig_lp'], best['orig_rp']
+                rare_indices_l = [i for i, v in enumerate(d['L']) if is_rare(v)]
+                rare_indices_r = [i for i, v in enumerate(d['R']) if is_rare(v)]
+                max_pos_l = max(rare_indices_l) if rare_indices_l else best['lp']
+                max_pos_r = max(rare_indices_r) if rare_indices_r else best['rp']
+                last_rare_dist = max(max_pos_l - start_l, max_pos_r - start_r)
+                display_range = last_rare_dist + 1
+
+                detail_data = []
+                for i in range(display_range):
+                    idx_l, idx_r = start_l + i, start_r + i
+                    l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
+                    r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
+                    def get_detail_disp(v):
+                        if v is None: return ""
+                        rn = get_rarity(v)
+                        return f"🌟 {rn}" if "LR" in rn or "LLR" in rn else str(v)
+                    detail_data.append({
+                        "枚数": "現在" if idx_l < best['lp'] and idx_r < best['rp'] else f"{max(0, idx_l - best['lp'] + 1, idx_r - best['rp'] + 1)}枚先",
+                        "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
+                    })
+                render_custom_table(pd.DataFrame(detail_data), height=400)
+            else:
+                st.error("一致なし")
+
+    render_result(tab_res1, (len(h)>=4), "#1f77b4")
+    render_result(tab_res2, (has_rare and len(h)>=2), "#FF4B4B")
+else:
+    st.info("番号を入力してください")
