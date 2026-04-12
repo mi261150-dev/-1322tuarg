@@ -94,13 +94,23 @@ def render_custom_table(df_data, height=450):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
+# スタイル適用（隠しボタンの処理を改善）
 st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     
-    /* 隠しボタンを完全に不可視化 */
-    div.stButton > button { position: fixed !important; left: -2000vw !important; visibility: hidden; }
+    /* 隠しボタンを「透明で見えないが、存在はする」状態にして反応を確保 */
+    .stButton > button {
+        opacity: 0 !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        position: absolute !important;
+        pointer-events: none !important;
+        z-index: -1;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -117,7 +127,7 @@ if st.session_state.history:
 # --- 番号入力 ---
 num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
 
-# --- HTML/JS ボタン (絶対に横並び) ---
+# --- 物理的横並びボタンコンポーネント ---
 btn_component_html = """
 <div style="display: flex; gap: 8px; width: 100%;">
     <button id="add" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">確定</button>
@@ -126,22 +136,23 @@ btn_component_html = """
 </div>
 
 <script>
-    const triggerBtn = (label) => {
-        const parentDoc = window.parent.document;
-        const buttons = Array.from(parentDoc.querySelectorAll('button'));
-        const target = buttons.find(b => b.innerText === label);
-        if (target) {
-            target.click();
+    const trigger = (text) => {
+        const btns = window.parent.document.querySelectorAll('button');
+        for (const b of btns) {
+            if (b.innerText === text) {
+                b.click();
+                break;
+            }
         }
     };
-    document.getElementById('add').onclick = () => triggerBtn('EXEC_ADD');
-    document.getElementById('back').onclick = () => triggerBtn('EXEC_BACK');
-    document.getElementById('clear').onclick = () => triggerBtn('EXEC_CLEAR');
+    document.getElementById('add').onclick = () => trigger('EXEC_ADD');
+    document.getElementById('back').onclick = () => trigger('EXEC_BACK');
+    document.getElementById('clear').onclick = () => trigger('EXEC_CLEAR');
 </script>
 """
 st.components.v1.html(btn_component_html, height=60)
 
-# 隠しボタン (プログラム側で反応を受け取る用)
+# --- 隠しボタンの実体 ---
 if st.button("EXEC_ADD"):
     if st.session_state.num_in is not None:
         st.session_state.history.append(int(st.session_state.num_in))
