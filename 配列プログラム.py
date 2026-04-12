@@ -99,26 +99,8 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     
-    /* 隠しボタンを完全に消去 */
-    div.stButton > button { position: fixed !important; left: -2000vw !important; }
-    
-    /* ボタン横並びを絶対維持するスタイル */
-    .btn-container {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        gap: 8px !important;
-        width: 100% !important;
-    }
-    .btn-container button {
-        flex: 1 !important;
-        height: 50px !important;
-        font-weight: bold !important;
-        background: #f0f2f6 !important;
-        border: 1px solid #ccc !important;
-        border-radius: 4px !important;
-        cursor: pointer !important;
-    }
+    /* 隠しボタンを完全に不可視化 */
+    div.stButton > button { position: fixed !important; left: -2000vw !important; visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -135,24 +117,31 @@ if st.session_state.history:
 # --- 番号入力 ---
 num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
 
-# --- HTML/JS による強制横並びボタン ---
-st.markdown(f"""
-<div class="btn-container">
-    <button onclick="parent.sendBtn('EXEC_ADD')">確定</button>
-    <button onclick="parent.sendBtn('EXEC_BACK')">消す</button>
-    <button onclick="parent.sendBtn('EXEC_CLEAR')">消去</button>
+# --- HTML/JS ボタン (絶対に横並び) ---
+btn_component_html = """
+<div style="display: flex; gap: 8px; width: 100%;">
+    <button id="add" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">確定</button>
+    <button id="back" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">消す</button>
+    <button id="clear" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">消去</button>
 </div>
-<script>
-    window.parent.sendBtn = (label) => {{
-        const doc = window.parent.document;
-        const buttons = Array.from(doc.querySelectorAll('button'));
-        const target = buttons.find(b => b.innerText === label);
-        if (target) target.click();
-    }};
-</script>
-""", unsafe_allow_html=True)
 
-# 隠しボタン
+<script>
+    const triggerBtn = (label) => {
+        const parentDoc = window.parent.document;
+        const buttons = Array.from(parentDoc.querySelectorAll('button'));
+        const target = buttons.find(b => b.innerText === label);
+        if (target) {
+            target.click();
+        }
+    };
+    document.getElementById('add').onclick = () => triggerBtn('EXEC_ADD');
+    document.getElementById('back').onclick = () => triggerBtn('EXEC_BACK');
+    document.getElementById('clear').onclick = () => triggerBtn('EXEC_CLEAR');
+</script>
+"""
+st.components.v1.html(btn_component_html, height=60)
+
+# 隠しボタン (プログラム側で反応を受け取る用)
 if st.button("EXEC_ADD"):
     if st.session_state.num_in is not None:
         st.session_state.history.append(int(st.session_state.num_in))
