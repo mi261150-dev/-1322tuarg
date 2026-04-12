@@ -103,14 +103,22 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; min-height: 50px; }
     
-    /* 番号入力欄を白背景・黒文字で見やすく */
+    /* 入力欄のスタイル：フォントも入力待ちと同じような設定へ */
     div[data-testid="stNumberInput"] input {
         background-color: #ffffff !important;
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
         caret-color: #000000 !important;
-        font-weight: 900 !important;
-        font-size: 22px !important;
+        font-weight: normal !important; /* フォントの太さを入力待ちと同じ(normal)に */
+        font-size: 18px !important;
+    }
+    
+    /* プレースホルダー（入力待ち）のスタイル */
+    div[data-testid="stNumberInput"] input::placeholder {
+        color: #666666 !important;
+        -webkit-text-fill-color: #666666 !important;
+        opacity: 1 !important;
+        font-weight: normal !important;
     }
     
     .half-width-container { width: 50% !important; min-width: 200px; }
@@ -133,7 +141,6 @@ hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font
 display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
 st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', unsafe_allow_html=True)
 
-# 履歴と入力欄の間に一行空ける
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
@@ -282,7 +289,7 @@ with peek_expander:
                 rares_found = []
                 for side_key in ["L", "R"]:
                     track = data[side_key]
-                    side_label = "左" if side_key == "L" else "right"
+                    side_label = "左" if side_key == "L" else "右"
                     for idx, val in enumerate(track):
                         if is_target_rare(val):
                             rares_found.append({
@@ -304,3 +311,4 @@ with peek_expander:
 
 if not st.session_state.history:
     st.info("番号を入力してください")
+    
