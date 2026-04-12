@@ -9,7 +9,8 @@ def get_rarity(n):
         names = {
             1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
             26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
-            55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3"
+            55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3",
+            101:"パラレルLLR ドーン" # 101番を追加
         }
         if n in names: return names[n]
 
@@ -79,7 +80,6 @@ st.markdown("""
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     .rare-card { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 10px; margin-top: 10px; }
     .status-err { color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px; }
-    /* レアカード強調表示 */
     .rare-highlight { color: #ff4b4b !important; font-weight: bold !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -89,7 +89,6 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# --- 入力エリア ---
 with st.container():
     c_in, c_add = st.columns([1, 1], gap="small")
     with c_in:
@@ -106,7 +105,6 @@ with st.container():
         if st.button("🗑️ 履歴を消す"):
             st.session_state.history = []; st.rerun()
 
-# 入力済み履歴の表示（常に表示＆光らせる）
 if st.session_state.history:
     hist_html = []
     for n in st.session_state.history:
@@ -131,22 +129,21 @@ with all_patterns_tab:
             l_v = target_d['L'][i] if i < len(target_d['L']) else ""
             r_v = target_d['R'][i] if i < len(target_d['R']) else ""
             
-            l_rare = get_rarity(l_v)
-            r_rare = get_rarity(r_v)
+            l_rare_name = get_rarity(l_v)
+            r_rare_name = get_rarity(r_v)
             
-            # 履歴にあるカードは ⭐ をつける
-            l_disp = f"⭐ {l_v}" if l_v in st.session_state.history else str(l_v)
-            r_disp = f"⭐ {r_v}" if r_v in st.session_state.history else str(r_v)
-            
-            # レアカードのみ ⭐ をつけて強調
-            l_rare_disp = f"🌟 {l_rare}" if is_rare(l_v) else l_rare
-            r_rare_disp = f"🌟 {r_rare}" if is_rare(r_v) else r_rare
-            
+            # 指定されたレアリティ（LLR, LR, パラレル）なら名前を、それ以外は番号を出す
+            def get_col_display(v, rare_name):
+                if not v: return ""
+                if "LR" in rare_name or "LLR" in rare_name:
+                    return f"🌟 {rare_name}"
+                return f"⭐ {v}" if v in st.session_state.history else str(v)
+
             view_data.append({
-                "No": i + 1,
-                "左": l_disp, "左レア度": l_rare_disp,
-                "右": r_disp, "右レア度": r_rare_disp
+                "左": get_col_display(l_v, l_rare_name),
+                "右": get_col_display(r_v, r_rare_name)
             })
+        # No列とレア度列を削除したDataFrameを表示
         st.dataframe(pd.DataFrame(view_data), use_container_width=True, hide_index=True)
 
 if st.session_state.history and patterns:
@@ -180,7 +177,6 @@ if st.session_state.history and patterns:
                     </div>
                 """, unsafe_allow_html=True)
 
-                # 特定された配列をすぐに確認できる
                 with st.expander("🔍 この配列の続きを確認"):
                     detail_data = []
                     for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
@@ -192,12 +188,10 @@ if st.session_state.history and patterns:
                             "右": r_v, "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
                         })
                     st.table(detail_data)
-
             else:
                 st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
 
     render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
     render_result(tab_res2, (len(h)>=4), "#1f77b4")
-
 else:
     st.info("カード番号を入力してください")
