@@ -101,12 +101,20 @@ st.markdown("""
     .stApp { background-color: #000000; }
     h1, h2, h3 { color: #ffffff !important; }
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
-    .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; margin-bottom: 10px; min-height: 50px; }
+    .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; min-height: 50px; }
+    
+    /* 番号入力欄を白背景・黒文字にする */
+    div[data-testid="stNumberInput"] input {
+        background-color: white !important;
+        color: black !important;
+        caret-color: black !important;
+        font-weight: bold !important;
+    }
+    
     .half-width-container { width: 50% !important; min-width: 200px; }
     div[data-testid="stHorizontalBlock"] { gap: 0.5rem !important; }
     .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; font-size: 18px !important; background-color: #333 !important; color: white !important; border: 1px solid #555 !important; }
     .stButton > button:hover { border-color: #ff4b4b !important; color: #ff4b4b !important; }
-    input { background-color: #222 !important; color: white !important; border: 1px solid #444 !important; }
     .peek-box { border: 2px solid #60b4ff; padding: 10px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 15px; }
     </style>
     """, unsafe_allow_html=True)
@@ -122,6 +130,9 @@ patterns = load_data()
 hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
 display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
 st.markdown(f'<div class="history-box">履歴: {display_text}</div>', unsafe_allow_html=True)
+
+# 履歴と入力欄の間に一行空ける
+st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
 st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", 
@@ -196,9 +207,8 @@ if st.session_state.history and patterns:
                             future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
                 
                 future_rares = sorted(future_rares, key=lambda x: x['dist'])
-                # 枚数予測の表示
                 future_texts = [f"💎 <span style='color:#00ffcc;'>{r['dist']}枚先</span>: {r['name']}" for r in future_rares]
-                rare_predict_html = "<br>".join(future_texts) if future_texts else "以降のレアなし"
+                rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
 
                 st.markdown(f"""
 <div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 10px;">
@@ -209,7 +219,7 @@ if st.session_state.history and patterns:
         <div style="flex:1;"><div style="color:#aaa; font-size:12px;">右・次</div><div style="font-size:32px; font-weight:bold; color:#ff4b4b;">{nr}</div><div style="font-size:11px; color:#eee;">{get_rarity(nr)}</div></div>
     </div>
     <div style="margin-top: 15px; text-align: left; font-size: 14px; color: #eee; background:#000; padding:10px; border-radius:5px;">
-        <strong style="color:#00ffcc;">🔜 この弾のレアカード出現予測:</strong><br>{rare_predict_html}
+        <strong style="color:#00ffcc;">🔜 レア予測:</strong><br>{rare_predict_html}
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -239,12 +249,11 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 配列のぞき見早見表 (最下部・最後(末尾)のカードを表示) ---
-peek_expander = st.expander("👁 配列のぞき見早見表 (最後のカード)")
+# --- 8. 配列のぞき見早見表 (最下部・特定ボタンなし・レア出現タブ付) ---
+peek_expander = st.expander("👁 配列のぞき見早見表 (末尾レアカード)")
 with peek_expander:
     if patterns:
         for p_name, data in patterns.items():
-            # 最後のカードを取得
             l_last = data["L"][-1]
             r_last = data["R"][-1]
             
@@ -255,24 +264,38 @@ with peek_expander:
             """, unsafe_allow_html=True)
             
             col_l, col_r = st.columns(2)
-            
             with col_l:
                 img_path_l = f"images/{l_last}.jpg"
                 if os.path.exists(img_path_l):
                     st.image(img_path_l, use_container_width=True)
                 st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>左末尾: No.{l_last}<br>{get_rarity(l_last)}</div>", unsafe_allow_html=True)
-                if st.button(f"特定 (左末)", key=f"peek_l_{p_name}"):
-                    st.session_state.history = [l_last]
-                    st.rerun()
 
             with col_r:
                 img_path_r = f"images/{r_last}.jpg"
                 if os.path.exists(img_path_r):
                     st.image(img_path_r, use_container_width=True)
                 st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>右末尾: No.{r_last}<br>{get_rarity(r_last)}</div>", unsafe_allow_html=True)
-                if st.button(f"特定 (右末)", key=f"peek_r_{p_name}"):
-                    st.session_state.history = [r_last]
-                    st.rerun()
+            
+            # 各配列の全レア出現予測タブ
+            with st.expander(f"{p_name} の全レアカード出現順"):
+                rares_found = []
+                for side_key in ["L", "R"]:
+                    track = data[side_key]
+                    side_label = "左" if side_key == "L" else "右"
+                    for idx, val in enumerate(track):
+                        if is_target_rare(val):
+                            rares_found.append({
+                                "pos": idx + 1,
+                                "name": get_rarity(val),
+                                "side": side_label
+                            })
+                
+                if rares_found:
+                    rares_found = sorted(rares_found, key=lambda x: x['pos'])
+                    for r in rares_found:
+                        st.markdown(f"📍 **{r['pos']}枚目** ({r['side']}): {r['name']}")
+                else:
+                    st.write("この配列にLR/LLR情報はありません")
             
             st.markdown("<br>", unsafe_allow_html=True)
     else:
