@@ -26,7 +26,6 @@ def is_rare(n):
     r = get_rarity(n)
     return any(x in r for x in ["LR", "LLR", "SR", "CP"])
 
-# 特定レアのみ（LR, LLR, パラレル）の判定
 def is_target_rare(n):
     r = get_rarity(n)
     return any(x in r for x in ["LR", "LLR"])
@@ -98,15 +97,6 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
-    /* スマホでボタンを横並びに強制 */
-    [data-testid="column"] {
-        flex-direction: row !important;
-        display: flex !important;
-        gap: 5px !important;
-    }
-    [data-testid="column"] > div { width: 33% !important; }
-    
-    .stButton > button { width: 100%; height: 3.5em; font-weight: bold; font-size: 14px; padding: 0 !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; }
     [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
     </style>
@@ -120,7 +110,47 @@ patterns = load_data()
 # 番号入力
 num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
 
-# 強制横並びボタン
+# --- ボタン部分をHTML/JSで実装（強制横並び） ---
+# Streamlitの値を更新するための隠しボタンを準備
+if st.button("update", key="hidden_update", help="invisible", label_visibility="collapsed"):
+    pass
+
+btn_html = f"""
+<div style="display: flex; gap: 5px; width: 100%;">
+    <button onclick="parent.window.postMessage({{type: 'btn', val: 'add'}}, '*')" style="flex: 1; height: 3.5em; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;">✅確定</button>
+    <button onclick="parent.window.postMessage({{type: 'btn', val: 'back'}}, '*')" style="flex: 1; height: 3.5em; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;">⬅️1消す</button>
+    <button onclick="parent.window.postMessage({{type: 'btn', val: 'clear'}}, '*')" style="flex: 1; height: 3.5em; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px;">🗑️消去</button>
+</div>
+<script>
+    const streamlitDoc = window.parent.document;
+    window.addEventListener('message', function(e) {{
+        if(e.data.type === 'btn') {{
+            const btns = streamlitDoc.querySelectorAll('button');
+            if(e.data.val === 'add') {{
+                // 確定の挙動をシミュレート（実際はStreamlitのコールバックが必要なため、SessionState経由で制御）
+                window.parent.postMessage('streamlit:set_component_value', '*');
+            }}
+        }}
+    }});
+</script>
+"""
+# 上記は複雑化を避けるため、既存のst.columnsをCSSで強制制御するアプローチに戻しつつ、さらに強力なスタイルを適用
+st.markdown("""
+    <style>
+    div[data-testid="column"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        justify-content: space-between !important;
+        width: 100% !important;
+    }
+    div[data-testid="column"] > div {
+        flex: 1 1 0% !important;
+        min-width: 0 !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 col_btns = st.columns(3)
 with col_btns[0]:
     if st.button("✅確定"):
@@ -160,7 +190,9 @@ with all_patterns_tab:
 if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
-    tab_res1, tab_res2 = st.tabs(["レアあり探索", "4枚一致探索"])
+    
+    # タブの入れ替え
+    tab_res1, tab_res2 = st.tabs(["① 4枚一致探索", "② レア探索"])
 
     def render_result(tab_obj, active_req, color):
         with tab_obj:
@@ -177,16 +209,19 @@ if st.session_state.history and patterns:
                 nl = d['L'][best['lp']] if best['lp'] < len(d['L']) else "終了"
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
                 
-                # 枠内のレア予測テキスト生成
-                future_texts = []
+                # レア予測（近い順にソート）
+                future_rares = []
                 for side in ["L", "R"]:
                     curr_pos = best['lp'] if side == "L" else best['rp']
                     track = d[side]
                     for i in range(curr_pos, len(track)):
                         val = track[i]
                         if is_target_rare(val):
-                            future_texts.append(f"💎 {i - curr_pos + 1}枚先: {get_rarity(val)}")
+                            future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
                 
+                # 近い順に並び替え
+                future_rares = sorted(future_rares, key=lambda x: x['dist'])
+                future_texts = [f"💎 {r['dist']}枚先: {r['name']}" for r in future_rares]
                 rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
 
                 st.markdown(f"""
@@ -205,8 +240,15 @@ if st.session_state.history and patterns:
 
                 st.write("### 🔍 配列の続き")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
+                
+                # その配列の「最後のレア」まで表示範囲を拡張
+                max_pos_l = max([i for i, v in enumerate(d['L']) if is_rare(v)] + [best['lp']])
+                max_pos_r = max([i for i, v in enumerate(d['R']) if is_rare(v)] + [best['rp']])
+                last_rare_dist = max(max_pos_l - start_l, max_pos_r - start_r)
+                display_range = last_rare_dist + 1
+
                 detail_data = []
-                for i in range((best['lp'] - best['orig_lp']) + 20):
+                for i in range(display_range):
                     idx_l, idx_r = start_l + i, start_r + i
                     l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
                     r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
@@ -215,14 +257,14 @@ if st.session_state.history and patterns:
                         rn = get_rarity(v)
                         return f"🌟 {rn}" if "LR" in rn or "LLR" in rn else str(v)
                     detail_data.append({
-                        "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
+                        "枚数": "現在" if idx_l < best['lp'] and idx_r < best['rp'] else f"{max(0, idx_l - best['lp'] + 1, idx_r - best['rp'] + 1)}枚先",
                         "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
                     })
-                render_custom_table(pd.DataFrame(detail_data), height=350)
+                render_custom_table(pd.DataFrame(detail_data), height=400)
             else:
                 st.error("一致なし")
 
-    render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
-    render_result(tab_res2, (len(h)>=4), "#1f77b4")
+    render_result(tab_res1, (len(h)>=4), "#1f77b4")
+    render_result(tab_res2, (has_rare and len(h)>=2), "#FF4B4B")
 else:
     st.info("番号を入力してください")
