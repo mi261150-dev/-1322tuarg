@@ -102,18 +102,29 @@ st.markdown("""
     h1, h2, h3 { color: #ffffff !important; }
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; margin-bottom: 10px; min-height: 50px; }
+    
+    /* ボタンエリアの横幅を半分に制限 */
+    .half-width-container {
+        width: 50% !important;
+        min-width: 200px;
+    }
+    
     div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
         gap: 0.5rem !important;
-        width: 100% !important;
     }
     .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; font-size: 18px !important; background-color: #333 !important; color: white !important; border: 1px solid #555 !important; }
     .stButton > button:hover { border-color: #ff4b4b !important; color: #ff4b4b !important; }
     input { background-color: #222 !important; color: white !important; border: 1px solid #444 !important; }
-    /* のぞき見表の横幅制限 */
-    .peek-container { max-width: 50%; margin: 0 auto; }
+    
+    /* のぞき見用ボックススタイル */
+    .peek-box {
+        border: 2px solid #60b4ff;
+        padding: 10px;
+        border-radius: 10px;
+        text-align: center;
+        background: #111;
+        margin-bottom: 15px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -133,7 +144,8 @@ st.markdown(f'<div class="history-box">履歴: {display_text}</div>', unsafe_all
 st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
-# --- ボタン列 (空白なし・横並び) ---
+# --- ボタン列 (横幅半分) ---
+st.markdown('<div class="half-width-container">', unsafe_allow_html=True)
 c1, c2 = st.columns(2)
 with c1:
     if st.button("確定", use_container_width=True):
@@ -148,6 +160,7 @@ with c2:
         if st.session_state.history:
             st.session_state.history.pop()
             st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -242,37 +255,45 @@ if st.session_state.history and patterns:
 
 st.divider()
 
-# --- 8. 配列のぞき見早見表 (最下部・タブで隠蔽・横幅2分の1) ---
-peek_tab = st.expander("👁 配列のぞき見早見表")
-with peek_tab:
-    # 全体を横幅半分にするためのコンテナ
-    st.markdown('<div class="peek-container">', unsafe_allow_html=True)
+# --- 8. 配列のぞき見早見表 (最下部・特定レイアウト・6配列縦並び) ---
+peek_expander = st.expander("👁 配列のぞき見早見表")
+with peek_expander:
     if patterns:
         for p_name, data in patterns.items():
-            st.markdown(f"#### {p_name}")
-            col_l, col_r = st.columns(2)
-            
             l_first = data["L"][0]
             r_first = data["R"][0]
+            
+            # 「配列n」解析結果と同じ枠組レイアウト
+            st.markdown(f"""
+            <div class="peek-box">
+                <div style="color: #fff; font-weight: bold; font-size: 18px; margin-bottom:10px;">{p_name}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # 枠内に画像と情報を配置（縦にボタンを並べるためカラム化）
+            col_l, col_r = st.columns(2)
             
             with col_l:
                 img_path_l = f"images/{l_first}.jpg"
                 if os.path.exists(img_path_l):
-                    st.image(img_path_l, caption=f"左始: {l_first}", use_container_width=True)
-                else:
-                    st.info(f"左:{l_first}")
-                if st.button(f"左始", key=f"btn_l_{p_name}"):
+                    st.image(img_path_l, use_container_width=True)
+                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>左始: No.{l_first}<br>{get_rarity(l_first)}</div>", unsafe_allow_html=True)
+                if st.button(f"特定 (左)", key=f"peek_l_{p_name}"):
                     st.session_state.history = [l_first]
                     st.rerun()
 
             with col_r:
                 img_path_r = f"images/{r_first}.jpg"
                 if os.path.exists(img_path_r):
-                    st.image(img_path_r, caption=f"右始: {r_first}", use_container_width=True)
-                else:
-                    st.info(f"右:{r_first}")
-                if st.button(f"右始", key=f"btn_r_{p_name}"):
+                    st.image(img_path_r, use_container_width=True)
+                st.markdown(f"<div style='text-align:center; color:#aaa; font-size:12px;'>右始: No.{r_first}<br>{get_rarity(r_first)}</div>", unsafe_allow_html=True)
+                if st.button(f"特定 (右)", key=f"peek_r_{p_name}"):
                     st.session_state.history = [r_first]
                     st.rerun()
-            st.markdown("---")
-    st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+    else:
+        st.info("データが読み込めていません。")
+
+if not st.session_state.history:
+    st.info("番号を入力してください")
