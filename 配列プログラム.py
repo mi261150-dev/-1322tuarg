@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import re
 
 # --- 1. レアリティ・名称定義 ---
 def get_rarity(n):
@@ -32,6 +33,7 @@ def load_data():
     try:
         df = pd.read_csv("配列.csv", header=None)
         patterns = {}
+        # 有効な列を判定（3行以上データがある列）
         valid_cols = [c for c in range(len(df.columns)) if pd.to_numeric(df.iloc[1:, c], errors='coerce').dropna().count() > 3]
         for i in range(0, len(valid_cols) - 1, 2):
             l_idx, r_idx = valid_cols[i], valid_cols[i+1]
@@ -66,7 +68,19 @@ def find_matches(history, L, R):
                         results.append({"lp": curr_m if side=="L" else curr_s, "rp": curr_s if side=="L" else curr_m})
     return results
 
-# --- 4. UI設定 ---
+# --- 4. スタイル関数 ---
+def color_red_history(val):
+    """番号が履歴に含まれるセルの文字色を赤くする"""
+    if not val: return ''
+    try:
+        # 文字列の中から数字の部分だけを抜き出す
+        num_part = re.search(r'\d+', str(val))
+        if num_part and int(num_part.group()) in st.session_state.history:
+            return 'color: red; font-weight: bold;'
+    except: pass
+    return ''
+
+# --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
@@ -86,6 +100,7 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
+# --- 入力エリア ---
 with st.container():
     c_in, c_add = st.columns([1, 1], gap="small")
     with c_in:
@@ -108,19 +123,7 @@ if st.session_state.history:
 
 st.divider()
 
-# --- 5. スタイル関数 ---
-def color_red_history(val):
-    """番号が含まれるセルの文字色を赤くする。名称表示の場合も判定するため補助的に使用"""
-    try:
-        # valから数値を抽出して判定
-        import re
-        num_part = re.search(r'\d+', str(val))
-        if num_part and int(num_part.group()) in st.session_state.history:
-            return 'color: red; font-weight: bold;'
-    except: pass
-    return ''
-
-# --- 6. 解析 & 表示 ---
+# --- 6. 全配列表表示 ---
 all_patterns_tab = st.expander("📊 すべての配列表データを見る")
 with all_patterns_tab:
     if patterns:
@@ -142,8 +145,10 @@ with all_patterns_tab:
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         
         df_display = pd.DataFrame(view_data)
-        st.dataframe(df_display.style.applymap(color_red_history), use_container_width=True, hide_index=True)
+        # applymap を最新の map に修正
+        st.dataframe(df_display.style.map(color_red_history), use_container_width=True, hide_index=True)
 
+# --- 7. 解析結果表示 ---
 if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
@@ -165,7 +170,7 @@ if st.session_state.history and patterns:
                 nr = d['R'][best['rp']] if best['rp'] < len(d['R']) else "終了"
                 
                 st.markdown(f"""
-                    <div style="border: 3px solid {color}; padding: 20px; border-radius: 15px; text-align: center; background: white;">
+                    <div style="border: 3px solid {color}; padding: 20px; border-radius: 15px; text-align: center; background: white; margin-bottom: 20px;">
                         <div style="color: {color}; font-weight: bold;">{best['name']} 特定</div>
                         <div style="display: flex; justify-content: space-around; margin-top: 15px;">
                             <div><div style="color: #666;">左・次</div><div class="next-num">{nl}</div><div class="rarity-tag">{get_rarity(nl)}</div></div>
@@ -175,7 +180,7 @@ if st.session_state.history and patterns:
                     </div>
                 """, unsafe_allow_html=True)
 
-                # 「続きを確認」はタブの内側に配置し、常に操作可能にする
+                # 「続きを確認」を隠さない（タブ内に直接表示）
                 st.write("### 🔍 この配列の続きを確認")
                 detail_data = []
                 for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
@@ -190,7 +195,8 @@ if st.session_state.history and patterns:
                         "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
                     })
                 df_det = pd.DataFrame(detail_data)
-                st.dataframe(df_det.style.applymap(color_red_history, subset=["左", "右"]), use_container_width=True, hide_index=True)
+                # applymap を最新の map に修正
+                st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]), use_container_width=True, hide_index=True)
             else:
                 st.markdown('<div style="color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px;">❌ 一致なし</div>', unsafe_allow_html=True)
 
