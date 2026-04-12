@@ -99,6 +99,15 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; }
     [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
+    
+    /* 隠しボタンを完全に不可視化 */
+    div.stButton > button[style*="display: none"] { display: none !important; }
+    .hidden-btn {
+        position: fixed !important;
+        left: -100vw !important;
+        top: -100vh !important;
+        visibility: hidden !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -107,25 +116,21 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# 番号入力
-num = st.number_input("番号", min_value=1, max_value=110, value=1, key="num_in", label_visibility="collapsed")
+# 番号入力 (value=Noneにすることで、確定後に空欄に戻るように設定)
+num = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", key="num_in", label_visibility="collapsed")
 
-# --- HTML/JSによる絶対横並びボタンアプローチ ---
-if 'btn_action' not in st.session_state: st.session_state.btn_action = None
-
+# --- 物理的横並びボタン（HTML/JS） ---
 btn_html = """
-<div style="display: flex; flex-direction: row; gap: 8px; width: 100%; box-sizing: border-box;">
+<div style="display: flex; flex-direction: row; gap: 8px; width: 100%;">
     <button id="add" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">✅確定</button>
     <button id="back" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">⬅️1消す</button>
     <button id="clear" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">🗑️消去</button>
 </div>
-
 <script>
     const send = (val) => {
         const doc = window.parent.document;
-        // 隠しボタンを探してクリックさせる仕組み
-        const buttons = Array.from(doc.querySelectorAll('button[kind="secondary"]'));
-        const target = buttons.find(b => b.innerText.includes(val));
+        const buttons = Array.from(doc.querySelectorAll('button'));
+        const target = buttons.find(b => b.innerText === val);
         if (target) target.click();
     };
     document.getElementById('add').onclick = () => send("HIDDEN_ADD");
@@ -135,14 +140,20 @@ btn_html = """
 """
 st.components.v1.html(btn_html, height=60)
 
-# JSから叩かれる隠しボタン（CSSで消す）
-st.markdown('<div style="display:none;">', unsafe_allow_html=True)
+# 隠しボタン
+st.markdown('<div class="hidden-btn">', unsafe_allow_html=True)
 if st.button("HIDDEN_ADD"):
-    st.session_state.history.append(int(st.session_state.num_in)); st.rerun()
+    if st.session_state.num_in is not None:
+        st.session_state.history.append(int(st.session_state.num_in))
+        # number_inputのkeyを更新してリセットを強制する
+        st.session_state.num_in = None
+    st.rerun()
 if st.button("HIDDEN_BACK"):
-    if st.session_state.history: st.session_state.history.pop(); st.rerun()
+    if st.session_state.history: st.session_state.history.pop()
+    st.rerun()
 if st.button("HIDDEN_CLEAR"):
-    st.session_state.history = []; st.rerun()
+    st.session_state.history = []
+    st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.history:
