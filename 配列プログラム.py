@@ -91,12 +91,16 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
+    /* 謎の空白を消すための追加設定 */
+    .stSelectbox { margin-bottom: -20px !important; } /* セレクトボックス下の余白を削る */
+    [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0rem !important; } /* 要素間の隙間をゼロに */
+
     /* スクロールエリア */
-    .scroll-box { height: 450px; overflow-y: auto; border: 1px solid #ddd; }
+    .scroll-box { height: 450px; overflow-y: auto; border: 1px solid #ddd; margin-top: 10px; }
     
     /* テーブルスタイル */
-    .scroll-box table { width: 100% !important; font-size: 20px !important; border-collapse: collapse; }
-    .scroll-box th { background-color: #f0f2f6 !important; pointer-events: none !important; text-align: center !important; border: 1px solid #eee !important; }
+    .scroll-box table { width: 100% !important; font-size: 20px !important; border-collapse: collapse; margin-bottom: 0px !important; }
+    .scroll-box th { background-color: #f0f2f6 !important; pointer-events: none !important; text-align: center !important; border: 1px solid #eee !important; padding: 8px !important; }
     .scroll-box td { padding: 8px !important; border: 1px solid #eee !important; text-align: center !important; pointer-events: none !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -133,7 +137,7 @@ all_patterns_tab = st.expander("📊 すべての配列表データを見る")
 with all_patterns_tab:
     if patterns:
         p_names = list(patterns.keys())
-        sel_p = st.selectbox("表示する配列を選択", p_names)
+        sel_p = st.selectbox("表示する配列を選択", p_names, label_visibility="collapsed")
         target_d = patterns[sel_p]
         view_data = []
         for i in range(max(len(target_d['L']), len(target_d['R']))):
@@ -146,8 +150,8 @@ with all_patterns_tab:
                 return highlight_numbers(txt)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         
+        # 不要な余白を生む要因を排除
         st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-        # index=False に修正して空白列を排除
         st.markdown(pd.DataFrame(view_data).to_html(index=False, escape=False), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -201,7 +205,6 @@ if st.session_state.history and patterns:
                     })
                 
                 st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-                # index=False に修正
                 st.markdown(pd.DataFrame(detail_data).to_html(index=False, escape=False), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
