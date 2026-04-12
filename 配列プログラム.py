@@ -68,15 +68,16 @@ def find_matches(history, L, R):
                                         "orig_lp": p if side=="L" else start_s, "orig_rp": start_s if side=="L" else p})
     return results
 
-# --- 4. スタイル関数 ---
-def color_red_history(val):
-    if not val: return ''
-    try:
-        num_part = re.search(r'\d+', str(val))
-        if num_part and int(num_part.group()) in st.session_state.history:
-            return 'color: red; font-weight: bold;'
-    except: pass
-    return ''
+# --- 4. 赤字変換ロジック ---
+def highlight_numbers(val):
+    if not val: return ""
+    str_val = str(val)
+    # 数字のみ抽出して履歴チェック
+    num_match = re.search(r'\d+', str_val)
+    if num_match:
+        if int(num_match.group()) in st.session_state.history:
+            return f'<span style="color:red; font-weight:bold;">{str_val}</span>'
+    return str_val
 
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
@@ -91,13 +92,17 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
-    /* スクロールエリアの設定 */
-    .scroll-box { height: 400px; overflow-y: auto; border: 1px solid #444; }
+    /* スクロールエリア */
+    .scroll-box { height: 450px; overflow-y: auto; border: 1px solid #444; background: #0e1117; }
     
-    /* 静的テーブル(st.table)のカスタマイズ */
-    div[data-testid="stTable"] table { width: 100% !important; font-size: 20px !important; }
-    div[data-testid="stTable"] th { background-color: #333 !important; color: white !important; pointer-events: none !important; }
-    div[data-testid="stTable"] td { padding: 5px !important; }
+    /* st.tableの空白列(Index)を消すCSS */
+    div[data-testid="stTable"] table thead tr th:first-child { display: none !important; }
+    div[data-testid="stTable"] table tbody tr td:first-child { display: none !important; }
+    
+    /* テーブルスタイル */
+    div[data-testid="stTable"] table { width: 100% !important; font-size: 20px !important; border-collapse: collapse; }
+    div[data-testid="stTable"] th { background-color: #333 !important; color: white !important; pointer-events: none !important; text-align: center !important; }
+    div[data-testid="stTable"] td { padding: 8px !important; border: 1px solid #444 !important; text-align: center !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -142,12 +147,12 @@ with all_patterns_tab:
             def get_disp(v):
                 if v is None: return ""
                 r_name = get_rarity(v)
-                if "LR" in r_name or "LLR" in r_name: return f"🌟 {r_name}"
-                return str(v)
+                txt = f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
+                return highlight_numbers(txt)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         
         st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-        st.table(pd.DataFrame(view_data))
+        st.markdown(pd.DataFrame(view_data).to_html(index=False, escape=False), unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 7. 解析結果表示 ---
@@ -190,7 +195,8 @@ if st.session_state.history and patterns:
                     def get_detail_disp(v):
                         if v is None: return ""
                         r_name = get_rarity(v)
-                        return f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
+                        txt = f"🌟 {r_name}" if "LR" in r_name or "LLR" in r_name else str(v)
+                        return highlight_numbers(txt)
 
                     detail_data.append({
                         "枚数": "現在" if idx_l < best['lp'] else f"{idx_l - best['lp'] + 1}枚先",
@@ -199,12 +205,7 @@ if st.session_state.history and patterns:
                     })
                 
                 st.markdown('<div class="scroll-box">', unsafe_allow_html=True)
-                # st.tableは赤字表示(style.map)が直接使えないため、HTMLで出力
-                df_html = pd.DataFrame(detail_data).to_html(index=False, escape=False)
-                # 履歴に含まれる番号を赤くする置換処理
-                for num_in_h in st.session_state.history:
-                    df_html = df_html.replace(f'<td>{num_in_h}</td>', f'<td><span style="color:red; font-weight:bold;">{num_in_h}</span></td>')
-                st.markdown(df_html, unsafe_allow_html=True)
+                st.markdown(pd.DataFrame(detail_data).to_html(index=False, escape=False), unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
 
                 st.write("### 💎 以降のレアカード一覧")
