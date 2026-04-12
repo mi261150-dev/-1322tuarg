@@ -103,22 +103,20 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; min-height: 50px; }
     
-    /* 入力欄のスタイル：フォントも入力待ちと同じような設定へ */
+    /* 入力欄のスタイル */
     div[data-testid="stNumberInput"] input {
         background-color: #ffffff !important;
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
         caret-color: #000000 !important;
-        font-weight: normal !important; /* フォントの太さを入力待ちと同じ(normal)に */
+        font-weight: normal !important;
         font-size: 18px !important;
     }
     
-    /* プレースホルダー（入力待ち）のスタイル */
+    /* プレースホルダー（入力待ちの文字）を消去 */
     div[data-testid="stNumberInput"] input::placeholder {
-        color: #666666 !important;
-        -webkit-text-fill-color: #666666 !important;
-        opacity: 1 !important;
-        font-weight: normal !important;
+        color: transparent !important;
+        -webkit-text-fill-color: transparent !important;
     }
     
     .half-width-container { width: 50% !important; min-width: 200px; }
@@ -144,7 +142,7 @@ st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', u
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
-st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="ここに番号を入力...", 
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="", # プレースホルダーを空に設定
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
 # --- ボタン列 (横幅半分) ---
@@ -311,4 +309,3 @@ with peek_expander:
 
 if not st.session_state.history:
     st.info("番号を入力してください")
-    
