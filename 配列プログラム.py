@@ -96,16 +96,12 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    @keyframes rainbow {
-        0% { background-color: #ffadad; }
-        16% { background-color: #ffd6a5; }
-        33% { background-color: #fdffb6; }
-        50% { background-color: #caffbf; }
-        66% { background-color: #9bf6ff; }
-        83% { background-color: #bdb2ff; }
-        100% { background-color: #ffadad; }
-    }
-    .stApp { animation: rainbow 5s infinite; }
+    /* 背景を白に固定 */
+    .stApp { background-color: white; }
+    
+    /* タイトル文字を黒に */
+    h1 { color: black !important; }
+    
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     div[data-testid="stHorizontalBlock"] {
@@ -200,4 +196,45 @@ if st.session_state.history and patterns:
                         if is_target_rare(val):
                             future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
                 
-                future_
+                future_rares = sorted(future_rares, key=lambda x: x['dist'])
+                future_texts = [f"💎 {r['dist']}枚先: {r['name']}" for r in future_rares]
+                rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
+
+                st.markdown(f"""
+<div style="border: 3px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: white; margin-bottom: 10px;">
+    <div style="color: {color}; font-weight: bold; font-size: 18px;">{best['name']} 特定</div>
+    <div style="display: flex; justify-content: space-around; margin-top: 5px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+        <div><div style="color:#666; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nl}</div><div style="font-size:10px;">{get_rarity(nl)}</div></div>
+        <div><div style="color:#666; font-size:10px;">右・次</div><div style="font-size:28px; font-weight:bold; color:#1f77b4;">{nr}</div><div style="font-size:10px;">{get_rarity(nr)}</div></div>
+    </div>
+    <div style="margin-top: 10px; text-align: left; font-size: 13px; color: #333;">
+        <strong>🔜 以降のLR/LLR予測:</strong><br>
+        {rare_predict_html}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+                st.write("### 🔍 配列の続き")
+                start_l, start_r = best['orig_lp'], best['orig_rp']
+                detail_data = []
+                for i in range(30):
+                    idx_l, idx_r = start_l + i, start_r + i
+                    l_v = d['L'][idx_l] if idx_l < len(d['L']) else None
+                    r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
+                    def get_detail_disp(v):
+                        if v is None: return ""
+                        rn = get_rarity(v)
+                        return f"🌟 {rn}" if ("LR" in rn or "LLR" in rn) else str(v)
+                    detail_data.append({
+                        "No.": idx_l + 1,
+                        "枚数": "現在" if idx_l < best['lp'] and idx_r < best['rp'] else f"{max(0, idx_l - best['lp'] + 1, idx_r - best['rp'] + 1)}枚先",
+                        "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
+                    })
+                render_custom_table(pd.DataFrame(detail_data), height=400)
+            else:
+                st.error("一致なし")
+
+    render_result(tab_res1, (len(h)>=4), "#1f77b4")
+    render_result(tab_res2, (has_rare and len(h)>=2), "#FF4B4B")
+else:
+    st.info("番号を入力してください")
