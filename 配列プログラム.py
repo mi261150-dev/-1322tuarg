@@ -95,11 +95,24 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
+    /* 1. ツールバーと検索機能を非表示 */
     [data-testid="stElementToolbar"], [data-testid="stDataFrameSearch"] { display: none !important; }
+    
+    /* 2. セル選択時のエフェクトを完全に無効化 */
     [data-testid="stDataFrame"] div:focus, [data-testid="stDataFrame"] canvas:focus { outline: none !important; }
-    [data-testid="stDataFrame"] th { pointer-events: none !important; user-select: none !important; }
-    [data-testid="stDataFrame"] [data-testid="stIcon"] { display: none !important; }
-    [data-testid="stDataFrame"] canvas { cursor: default !important; }
+    
+    /* 3. 【最重要】ヘッダーのクリックを物理的に禁止（並び替え防止） */
+    thead tr th {
+        pointer-events: none !important;
+    }
+    
+    /* 並び替え用アイコン等を強制非表示 */
+    [data-testid="stDataFrame"] [data-testid="stIcon"],
+    [data-testid="stDataFrame"] .sort-icon {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
     div[data-testid="stDataFrame"] td { font-size: 20px !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -149,7 +162,6 @@ with all_patterns_tab:
                 return str(v)
             view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         df_display = pd.DataFrame(view_data)
-        # on_select=None を削除してエラー回避
         st.dataframe(df_display.style.map(color_red_history).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
 
 # --- 7. 解析結果表示 ---
@@ -203,7 +215,6 @@ if st.session_state.history and patterns:
                         "右": get_detail_disp(r_v)
                     })
                 df_det = pd.DataFrame(detail_data)
-                # ここも on_select=None を削除
                 st.dataframe(df_det.style.map(color_red_history, subset=["左", "右"]).set_properties(subset=['左'], **{'text-align': 'right'}), use_container_width=True, hide_index=True)
 
                 st.write("### 💎 以降のレアカード一覧")
