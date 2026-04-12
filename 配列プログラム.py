@@ -75,20 +75,18 @@ def find_matches(history, L, R):
 # --- 4. 表生成関数 ---
 def render_custom_table(df_data, height=450):
     df_html = df_data.to_html(index=False, escape=False)
-    # 履歴の数字のみを赤くする（No.列などを除外するため、特定のtdのみ置換）
     for n in st.session_state.history:
         target = f'<td>{n}</td>'
-        replacement = f'<td><span style="color:#ff4b4b; font-weight:bold;">{n}</span></td>'
+        replacement = f'<td><span style="color:#ffdd00; font-weight:bold;">{n}</span></td>'
         df_html = df_html.replace(target, replacement)
     
     html_code = f"""
-    <div style="height: {height}px; overflow-y: auto; border: 1px solid #444; margin-top: 5px; background: #111;">
+    <div style="height: {height}px; overflow-y: auto; border: 1px solid #555; margin-top: 5px; background: #000; border-radius: 5px;">
         <style>
-            table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 16px; table-layout: fixed; color: #eee; }}
-            th {{ position: sticky; top: 0; background: #262626; z-index: 5; border: 1px solid #444; padding: 8px; text-align: center; }}
-            td {{ border: 1px solid #333; padding: 8px; text-align: center; background: #1a1a1a; pointer-events: none; }}
-            /* No.列（1番目の列）を小さくし、色を固定 */
-            td:nth-child(1), th:nth-child(1) {{ width: 50px !important; font-size: 12px; color: #888 !important; }}
+            table {{ width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 15px; table-layout: fixed; color: #fff; }}
+            th {{ position: sticky; top: 0; background: #333; z-index: 5; border: 1px solid #555; padding: 10px; text-align: center; color: #00ffcc; }}
+            td {{ border: 1px solid #444; padding: 10px; text-align: center; background: #111; pointer-events: none; }}
+            td:nth-child(1), th:nth-child(1) {{ width: 45px !important; font-size: 11px; color: #888 !important; }}
         </style>
         {df_html}
     </div>
@@ -100,20 +98,21 @@ st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; }
-    h1 { color: white !important; }
+    .stApp { background-color: #000000; }
+    h1, h2, h3 { color: #ffffff !important; text-shadow: 1px 1px 2px #ff4b4b; }
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
-    .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
+    .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; margin-bottom: 10px; min-height: 50px; }
     div[data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
         gap: 0.5rem !important;
-        width: 50% !important;
-        min-width: 200px !important;
+        width: 100% !important;
+        max-width: 400px;
     }
-    [data-testid="column"] { flex: 1 1 0% !important; }
-    .stButton > button { width: 100% !important; height: 3rem !important; font-weight: bold !important; padding: 0 !important; }
+    .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; font-size: 18px !important; background-color: #333 !important; color: white !important; border: 1px solid #555 !important; }
+    .stButton > button:hover { border-color: #ff4b4b !important; color: #ff4b4b !important; }
+    input { background-color: #222 !important; color: white !important; border: 1px solid #444 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -124,43 +123,19 @@ if 'reset_counter' not in st.session_state: st.session_state.reset_counter = 0
 
 patterns = load_data()
 
-# --- 新項目：配列のぞき見早見表 ---
-peek_tab = st.expander("👁 配列のぞき見早見表 (最初のカード)")
-with peek_tab:
-    if patterns:
-        cols = st.columns(3)
-        for idx, (p_name, data) in enumerate(patterns.items()):
-            col = cols[idx % 3]
-            # 最初のカードを取得（L側）
-            first_no = data["L"][0]
-            name = get_rarity(first_no)
-            with col:
-                # 画像表示用（imagesフォルダに 番号.jpg がある前提。なければテキスト表示）
-                img_path = f"images/{first_no}.jpg"
-                if os.path.exists(img_path):
-                    st.image(img_path, use_container_width=True)
-                else:
-                    st.write(f"【画像なし】")
-                
-                st.write(f"**{p_name}**")
-                st.write(f"No.{first_no}: {name}")
-                if st.button(f"この配列を選択", key=f"sel_{p_name}"):
-                    st.session_state.history = [first_no]
-                    st.rerun()
-
-# --- 履歴 ---
-if st.session_state.history:
-    hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
-    st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
+# --- 履歴 (常時表示) ---
+hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
+display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
+st.markdown(f'<div class="history-box">履歴: {display_text}</div>', unsafe_allow_html=True)
 
 # --- 番号入力 ---
-st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", 
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号を入力...", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
 # --- ボタン列 ---
 c1, c2 = st.columns(2)
 with c1:
-    if st.button("確定", use_container_width=True):
+    if st.button("確定"):
         input_key = f"num_in_{st.session_state.reset_counter}"
         input_val = st.session_state.get(input_key)
         if input_val is not None:
@@ -168,7 +143,7 @@ with c1:
             st.session_state.reset_counter += 1
             st.rerun()
 with c2:
-    if st.button("消す", use_container_width=True):
+    if st.button("消す"):
         if st.session_state.history:
             st.session_state.history.pop()
             st.rerun()
@@ -176,7 +151,7 @@ with c2:
 st.divider()
 
 # --- 6. 配列表一覧表示 ---
-all_patterns_tab = st.expander("📊 配列表一覧")
+all_patterns_tab = st.expander("📊 配列表一覧 (CSVデータ確認)")
 with all_patterns_tab:
     if patterns:
         p_names = list(patterns.keys())
@@ -224,19 +199,19 @@ if st.session_state.history and patterns:
                             future_rares.append({"dist": i - curr_pos + 1, "name": get_rarity(val)})
                 
                 future_rares = sorted(future_rares, key=lambda x: x['dist'])
-                future_texts = [f"💎 {r['dist']}枚先: {r['name']}" for r in future_rares]
+                future_texts = [f"💎 <span style='color:#00ffcc;'>{r['dist']}枚先</span>: {r['name']}" for r in future_rares]
                 rare_predict_html = "<br>".join(future_texts) if future_texts else "なし"
 
                 st.markdown(f"""
-<div style="border: 3px solid {color}; padding: 10px; border-radius: 10px; text-align: center; background: #1a1d24; margin-bottom: 10px;">
-    <div style="color: {color}; font-weight: bold; font-size: 18px;">{best['name']}</div>
-    <div style="display: flex; justify-content: space-around; margin-top: 5px; border-bottom: 1px solid #333; padding-bottom: 10px;">
-        <div><div style="color:#aaa; font-size:10px;">左・次</div><div style="font-size:28px; font-weight:bold; color:#ff4b4b;">{nl}</div><div style="font-size:10px; color:#eee;">{get_rarity(nl)}</div></div>
-        <div><div style="color:#aaa; font-size:10px;">右・次</div><div style="font-size:28px; font-weight:bold; color:#ff4b4b;">{nr}</div><div style="font-size:10px; color:#eee;">{get_rarity(nr)}</div></div>
+<div style="border: 2px solid {color}; padding: 15px; border-radius: 10px; text-align: center; background: #111; margin-bottom: 10px;">
+    <div style="color: #fff; font-weight: bold; font-size: 20px; margin-bottom:10px;">{best['name']}</div>
+    <div style="display: flex; justify-content: space-around; border-bottom: 1px solid #444; padding-bottom: 15px;">
+        <div style="flex:1;"><div style="color:#aaa; font-size:12px;">左・次</div><div style="font-size:32px; font-weight:bold; color:#ff4b4b;">{nl}</div><div style="font-size:11px; color:#eee;">{get_rarity(nl)}</div></div>
+        <div style="width:1px; background:#444; margin:0 10px;"></div>
+        <div style="flex:1;"><div style="color:#aaa; font-size:12px;">右・次</div><div style="font-size:32px; font-weight:bold; color:#ff4b4b;">{nr}</div><div style="font-size:11px; color:#eee;">{get_rarity(nr)}</div></div>
     </div>
-    <div style="margin-top: 10px; text-align: left; font-size: 13px; color: #eee;">
-        <strong>🔜 以降のLR/LLR予測:</strong><br>
-        {rare_predict_html}
+    <div style="margin-top: 15px; text-align: left; font-size: 14px; color: #eee; background:#000; padding:10px; border-radius:5px;">
+        <strong style="color:#00ffcc;">🔜 レア予測:</strong><br>{rare_predict_html}
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -250,18 +225,4 @@ if st.session_state.history and patterns:
                     r_v = d['R'][idx_r] if idx_r < len(d['R']) else None
                     def get_detail_disp(v):
                         if v is None: return ""
-                        rn = get_rarity(v)
-                        return f"🌟 {rn}" if ("LR" in rn or "LLR" in rn) else str(v)
-                    detail_data.append({
-                        "No.": idx_l + 1,
-                        "枚数": "現在" if idx_l < best['lp'] and idx_r < best['rp'] else f"{max(0, idx_l - best['lp'] + 1, idx_r - best['rp'] + 1)}枚先",
-                        "左": get_detail_disp(l_v), "右": get_detail_disp(r_v)
-                    })
-                render_custom_table(pd.DataFrame(detail_data), height=400)
-            else:
-                st.error("一致なし")
-
-    render_result(tab_res1, (len(h)>=4), "#60b4ff")
-    render_result(tab_res2, (has_rare and len(h)>=2), "#ff4b4b")
-else:
-    st.info("番号を入力してください")
+                        rn
