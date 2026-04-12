@@ -103,20 +103,22 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #1a1a1a; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 16px; border: 1px solid #444; border-left: 5px solid #ff4b4b; min-height: 50px; }
     
-    /* 入力欄のスタイル */
+    /* 入力欄のスタイル：フォントも入力待ちと同じような設定へ */
     div[data-testid="stNumberInput"] input {
         background-color: #ffffff !important;
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
         caret-color: #000000 !important;
-        font-weight: normal !important;
+        font-weight: normal !important; /* フォントの太さを入力待ちと同じ(normal)に */
         font-size: 18px !important;
     }
     
-    /* 入力欄内のプレースホルダーを透明化 */
+    /* プレースホルダー（入力待ち）のスタイル */
     div[data-testid="stNumberInput"] input::placeholder {
-        color: transparent !important;
-        -webkit-text-fill-color: transparent !important;
+        color: #666666 !important;
+        -webkit-text-fill-color: #666666 !important;
+        opacity: 1 !important;
+        font-weight: normal !important;
     }
     
     .half-width-container { width: 50% !important; min-width: 200px; }
@@ -136,14 +138,13 @@ patterns = load_data()
 
 # --- 出たカード (履歴表示) ---
 hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
-# 「入力待ち...」を削除（空文字に変更）
-display_text = " > ".join(hist_html) if hist_html else ""
+display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
 st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
-st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="", 
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder=".", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
 # --- ボタン列 (横幅半分) ---
@@ -310,4 +311,3 @@ with peek_expander:
 
 if not st.session_state.history:
     st.info("番号を入力してください")
-    
