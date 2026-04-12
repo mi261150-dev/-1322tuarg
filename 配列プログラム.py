@@ -99,10 +99,24 @@ st.markdown("""
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; margin-bottom: 5px; }
     
-    /* 横並びCSS */
-    [data-testid="column"] { flex: 1 1 0% !important; min-width: 0px !important; }
-    div[data-testid="stHorizontalBlock"] { display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center !important; gap: 0.5rem !important; }
-    .stButton > button { width: 100% !important; height: 3.5rem !important; font-weight: bold !important; padding: 0 !important; }
+    /* ボタンエリアの幅を半分に制限して中央寄せ */
+    div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 0.5rem !important;
+        width: 50% !important; /* 横幅を半分に */
+        min-width: 200px !important; /* 小さくなりすぎ防止 */
+    }
+    [data-testid="column"] {
+        flex: 1 1 0% !important;
+    }
+    .stButton > button {
+        width: 100% !important;
+        height: 3rem !important;
+        font-weight: bold !important;
+        padding: 0 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -111,19 +125,18 @@ st.title("VR-1弾配列サーチ")
 if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
-# --- 履歴 (検索バーの真上) ---
+# --- 履歴 ---
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">履歴: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
-# --- 番号入力 (キーを固定) ---
-val = st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
+# --- 番号入力 ---
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="番号入力...", key="num_in", label_visibility="collapsed")
 
-# --- ボタン列 ---
-c1, c2, c3 = st.columns(3)
+# --- ボタン列 (横幅を絞った 確定・消す) ---
+c1, c2 = st.columns(2)
 with c1:
     if st.button("確定", use_container_width=True):
-        # セッション状態から直接値を取得して判定
         input_val = st.session_state.get("num_in")
         if input_val is not None:
             st.session_state.history.append(int(input_val))
@@ -133,10 +146,6 @@ with c2:
         if st.session_state.history:
             st.session_state.history.pop()
             st.rerun()
-with c3:
-    if st.button("消去", use_container_width=True):
-        st.session_state.history = []
-        st.rerun()
 
 st.divider()
 
