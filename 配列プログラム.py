@@ -81,7 +81,7 @@ def color_red_history(val):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
-# CSS: ツールバー非表示、クリック時の枠線(フォーカス)無効化、並び替えアイコン非表示
+# CSS: セル選択時の枠線、ツールバー、並び替えを徹底的に無効化
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 2px !important; padding-right: 2px !important; }
@@ -92,19 +92,30 @@ st.markdown("""
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
     
-    /* 1. ツールバー（ダウンロード等）を隠す */
+    /* 1. ツールバー（ダウンロード等）を非表示 */
     [data-testid="stElementToolbar"] { display: none !important; }
     
-    /* 2. セル選択時の赤枠・青枠を消す */
-    [data-testid="stDataFrame"] div:focus { outline: none !important; }
-    [data-testid="stDataFrame"] [role="gridcell"]:focus { outline: none !important; }
+    /* 2. セル選択時の枠線（フォーカス）を完全に消す */
+    [data-testid="stDataFrame"] div:focus,
+    [data-testid="stDataFrame"] canvas:focus,
+    [data-testid="stDataFrame"] [role="gridcell"]:focus {
+        outline: none !important;
+        box-shadow: none !important;
+    }
     
-    /* 3. テーブル内の文字サイズ設定 */
+    /* 3. 並び替えを無効化（ヘッダーのクリックを禁止） */
+    [data-testid="stDataFrame"] th {
+        pointer-events: none !important;
+        user-select: none !important;
+    }
+    
+    /* 4. 並び替えアイコンを非表示 */
+    [data-testid="stDataFrame"] [data-testid="stIcon"] {
+        display: none !important;
+    }
+
+    /* 5. テーブル内の文字サイズ設定 */
     div[data-testid="stDataFrame"] td { font-size: 20px !important; }
-    
-    /* 4. 並び替え矢印を非表示にし、ヘッダーのクリック感をなくす */
-    [data-testid="stDataFrame"] th [data-testid="stIcon"] { display: none !important; }
-    [data-testid="stDataFrame"] th { pointer-events: none !important; }
     </style>
     """, unsafe_allow_html=True)
 
