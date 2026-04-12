@@ -94,25 +94,11 @@ def render_custom_table(df_data, height=450):
 # --- 5. UI設定 ---
 st.set_page_config(page_title="VR-1弾サーチ", layout="centered")
 
-# スマホ横並び強制用スタイル
 st.markdown("""
     <style>
     [data-testid="stVerticalBlock"] { gap: 0.3rem !important; }
     .history-box { background: #262730; color: #ffffff; padding: 10px; border-radius: 8px; font-size: 16px; border-left: 5px solid #ff4b4b; }
     [data-testid="stExpander"] [data-testid="stVerticalBlock"] { gap: 0 !important; padding: 0 !important; }
-    
-    /* ボタン横並びアプローチ */
-    div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        width: 100% !important;
-        gap: 5px !important;
-    }
-    div[data-testid="stHorizontalBlock"] > div {
-        width: 33% !important;
-        flex: none !important;
-    }
-    .stButton > button { width: 100%; height: 3.5em; font-weight: bold; font-size: 14px; padding: 0 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -122,19 +108,42 @@ if 'history' not in st.session_state: st.session_state.history = []
 patterns = load_data()
 
 # 番号入力
-num = st.number_input("番号", min_value=1, max_value=110, value=1, label_visibility="collapsed")
+num = st.number_input("番号", min_value=1, max_value=110, value=1, key="num_in", label_visibility="collapsed")
 
-# ボタン配置（CSSで制御）
-col_btns = st.columns(3)
-with col_btns[0]:
-    if st.button("✅確定"):
-        st.session_state.history.append(int(num)); st.rerun()
-with col_btns[1]:
-    if st.button("⬅️1消す"):
-        if st.session_state.history: st.session_state.history.pop(); st.rerun()
-with col_btns[2]:
-    if st.button("🗑️消去"):
-        st.session_state.history = []; st.rerun()
+# --- HTML/JSによる絶対横並びボタンアプローチ ---
+if 'btn_action' not in st.session_state: st.session_state.btn_action = None
+
+btn_html = """
+<div style="display: flex; flex-direction: row; gap: 8px; width: 100%; box-sizing: border-box;">
+    <button id="add" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">✅確定</button>
+    <button id="back" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">⬅️1消す</button>
+    <button id="clear" style="flex: 1; height: 50px; font-weight: bold; background: #f0f2f6; border: 1px solid #ccc; border-radius: 4px; cursor: pointer;">🗑️消去</button>
+</div>
+
+<script>
+    const send = (val) => {
+        const doc = window.parent.document;
+        // 隠しボタンを探してクリックさせる仕組み
+        const buttons = Array.from(doc.querySelectorAll('button[kind="secondary"]'));
+        const target = buttons.find(b => b.innerText.includes(val));
+        if (target) target.click();
+    };
+    document.getElementById('add').onclick = () => send("HIDDEN_ADD");
+    document.getElementById('back').onclick = () => send("HIDDEN_BACK");
+    document.getElementById('clear').onclick = () => send("HIDDEN_CLEAR");
+</script>
+"""
+st.components.v1.html(btn_html, height=60)
+
+# JSから叩かれる隠しボタン（CSSで消す）
+st.markdown('<div style="display:none;">', unsafe_allow_html=True)
+if st.button("HIDDEN_ADD"):
+    st.session_state.history.append(int(st.session_state.num_in)); st.rerun()
+if st.button("HIDDEN_BACK"):
+    if st.session_state.history: st.session_state.history.pop(); st.rerun()
+if st.button("HIDDEN_CLEAR"):
+    st.session_state.history = []; st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.history:
     hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
@@ -165,7 +174,6 @@ if st.session_state.history and patterns:
     h = st.session_state.history
     has_rare = any(is_rare(n) for n in h)
     
-    # タブ順序: ①4枚一致, ②レア探索
     tab_res1, tab_res2 = st.tabs(["① 4枚一致探索", "② レア探索"])
 
     def render_result(tab_obj, active_req, color):
@@ -214,7 +222,6 @@ if st.session_state.history and patterns:
                 st.write("### 🔍 配列の続き")
                 start_l, start_r = best['orig_lp'], best['orig_rp']
                 
-                # 配列内の最後のレアまで表示範囲を拡張
                 rare_indices_l = [i for i, v in enumerate(d['L']) if is_rare(v)]
                 rare_indices_r = [i for i, v in enumerate(d['R']) if is_rare(v)]
                 max_pos_l = max(rare_indices_l) if rare_indices_l else best['lp']
