@@ -10,7 +10,7 @@ def get_rarity(n):
             1:"LR カタストロム", 7:"LLR ドーン", 16:"LR デモンズ", 18:"LR ぎーつ",
             26:"LLR クウガ", 27:"LR アギト", 36:"LR 電王", 48:"LR ゴースト",
             55:"LR ジ王", 58:"LR ディケイド", 61:"LLR V3",
-            101:"パラレルLLR ドーン" # 101番を追加
+            101:"パラレルLLR ドーン"
         }
         if n in names: return names[n]
 
@@ -78,9 +78,6 @@ st.markdown("""
     .next-num { font-size: 42px; font-weight: bold; color: #1f77b4; line-height: 1; }
     .rarity-tag { font-size: 18px; color: #d32f2f; font-weight: bold; }
     .history-box { background: #262730; color: #ffffff; padding: 12px; border-radius: 8px; font-size: 20px; font-weight: bold; margin-bottom: 10px; border-left: 5px solid #ff4b4b; }
-    .rare-card { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 10px; margin-top: 10px; }
-    .status-err { color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px; }
-    .rare-highlight { color: #ff4b4b !important; font-weight: bold !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -106,17 +103,24 @@ with st.container():
             st.session_state.history = []; st.rerun()
 
 if st.session_state.history:
-    hist_html = []
-    for n in st.session_state.history:
-        if is_rare(n):
-            hist_html.append(f'<span style="color:#ffff00; font-weight:bold;">{n}</span>')
-        else:
-            hist_html.append(str(n))
+    hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
     st.markdown(f'<div class="history-box">出たカード: {" > ".join(hist_html)}</div>', unsafe_allow_html=True)
 
 st.divider()
 
-# --- 5. 解析 & 表示 ---
+# --- 5. スタイル関数 ---
+def color_red_history(val):
+    """番号が含まれるセルの文字色を赤くする。名称表示の場合も判定するため補助的に使用"""
+    try:
+        # valから数値を抽出して判定
+        import re
+        num_part = re.search(r'\d+', str(val))
+        if num_part and int(num_part.group()) in st.session_state.history:
+            return 'color: red; font-weight: bold;'
+    except: pass
+    return ''
+
+# --- 6. 解析 & 表示 ---
 all_patterns_tab = st.expander("📊 すべての配列表データを見る")
 with all_patterns_tab:
     if patterns:
@@ -126,34 +130,19 @@ with all_patterns_tab:
         
         view_data = []
         for i in range(max(len(target_d['L']), len(target_d['R']))):
-            l_v = target_d['L'][i] if i < len(target_d['L']) else ""
-            r_v = target_d['R'][i] if i < len(target_d['R']) else ""
+            l_v = target_d['L'][i] if i < len(target_d['L']) else None
+            r_v = target_d['R'][i] if i < len(target_d['R']) else None
             
-            l_rare_name = get_rarity(l_v)
-            r_rare_name = get_rarity(r_v)
-            
-            # 履歴にある番号を赤くする処理
-            def get_col_display(v, rare_name):
-                if not v: return ""
-                
-                # 表示テキストの決定（レアなら名称、それ以外は番号）
-                display_text = f"🌟 {rare_name}" if ("LR" in rare_name or "LLR" in rare_name) else str(v)
-                
-                # 履歴に含まれる場合は赤色にする
-                if v in st.session_state.history:
-                    return f'<span style="color: red; font-weight: bold;">{display_text}</span>'
-                return display_text
+            def get_disp(v):
+                if v is None: return ""
+                r_name = get_rarity(v)
+                if "LR" in r_name or "LLR" in r_name: return f"🌟 {r_name}"
+                return str(v)
 
-            view_data.append({
-                "左": get_col_display(l_v, l_rare_name),
-                "右": get_col_display(r_v, r_rare_name)
-            })
+            view_data.append({"左": get_disp(l_v), "右": get_disp(r_v)})
         
-        # HTMLを表示できるように unsafe_allow_html を使って表示（DataFrameだとタグがそのまま出るため）
-        # ただしDataFrameのままで色を付けたい場合はst.dataframeのcolumn_configやstyleを使いますが、
-        # 今回のロジック維持のため、最もシンプルなMarkdownテーブル形式に変換します。
-        df_html = pd.DataFrame(view_data).to_html(escape=False, index=False)
-        st.write(df_html, unsafe_allow_html=True)
+        df_display = pd.DataFrame(view_data)
+        st.dataframe(df_display.style.applymap(color_red_history), use_container_width=True, hide_index=True)
 
 if st.session_state.history and patterns:
     h = st.session_state.history
@@ -186,24 +175,24 @@ if st.session_state.history and patterns:
                     </div>
                 """, unsafe_allow_html=True)
 
-                with st.expander("🔍 この配列の続きを確認"):
-                    detail_data = []
-                    for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
-                        l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else ""
-                        l_r = get_rarity(l_v); r_r = get_rarity(r_v)
-                        
-                        # 検索結果の表でも、履歴にある番号を赤く表示
-                        l_disp = f'<span style="color:red;">{l_v}</span>' if l_v in st.session_state.history else str(l_v)
-                        r_disp = f'<span style="color:red;">{r_v}</span>' if r_v in st.session_state.history else str(r_v)
-                        
-                        detail_data.append({
-                            "枚数先": i - best['lp'] + 1,
-                            "左": l_disp, "左レア度": f"🌟 {l_r}" if is_rare(l_v) else l_r,
-                            "右": r_disp, "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
-                        })
-                    st.write(pd.DataFrame(detail_data).to_html(escape=False, index=False), unsafe_allow_html=True)
+                # 「続きを確認」はタブの内側に配置し、常に操作可能にする
+                st.write("### 🔍 この配列の続きを確認")
+                detail_data = []
+                for i in range(best['lp'], min(best['lp']+20, len(d['L']))):
+                    l_v = d['L'][i]; r_v = d['R'][i] if i < len(d['R']) else None
+                    l_r = get_rarity(l_v); r_r = get_rarity(r_v)
+                    
+                    detail_data.append({
+                        "枚数先": i - best['lp'] + 1,
+                        "左": str(l_v) if l_v is not None else "", 
+                        "左レア度": f"🌟 {l_r}" if is_rare(l_v) else l_r,
+                        "右": str(r_v) if r_v is not None else "", 
+                        "右レア度": f"🌟 {r_r}" if is_rare(r_v) else r_r
+                    })
+                df_det = pd.DataFrame(detail_data)
+                st.dataframe(df_det.style.applymap(color_red_history, subset=["左", "右"]), use_container_width=True, hide_index=True)
             else:
-                st.markdown('<div class="status-err">❌ 一致なし</div>', unsafe_allow_html=True)
+                st.markdown('<div style="color: #ff4b4b; font-weight: bold; font-size: 22px; text-align: center; padding: 20px;">❌ 一致なし</div>', unsafe_allow_html=True)
 
     render_result(tab_res1, (has_rare and len(h)>=2), "#FF4B4B")
     render_result(tab_res2, (len(h)>=4), "#1f77b4")
