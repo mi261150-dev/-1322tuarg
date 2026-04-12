@@ -113,7 +113,7 @@ st.markdown("""
         font-size: 18px !important;
     }
     
-    /* プレースホルダー（入力待ちの文字）を消去 */
+    /* 入力欄内のプレースホルダーを透明化 */
     div[data-testid="stNumberInput"] input::placeholder {
         color: transparent !important;
         -webkit-text-fill-color: transparent !important;
@@ -136,13 +136,14 @@ patterns = load_data()
 
 # --- 出たカード (履歴表示) ---
 hist_html = [f'<span style="color:{"#ffff00" if is_rare(n) else "#ffffff"}; font-weight:bold;">{n}</span>' for n in st.session_state.history]
-display_text = " > ".join(hist_html) if hist_html else "<span style='color:#666;'>入力待ち...</span>"
+# 「入力待ち...」を削除（空文字に変更）
+display_text = " > ".join(hist_html) if hist_html else ""
 st.markdown(f'<div class="history-box">出たカード: {display_text}</div>', unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 番号入力 ---
-st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="", # プレースホルダーを空に設定
+st.number_input("番号", min_value=1, max_value=110, value=None, placeholder="", 
                 key=f"num_in_{st.session_state.reset_counter}", label_visibility="collapsed")
 
 # --- ボタン列 (横幅半分) ---
@@ -309,3 +310,4 @@ with peek_expander:
 
 if not st.session_state.history:
     st.info("番号を入力してください")
+    
