@@ -217,9 +217,23 @@ with all_patterns_tab:
         p_names = list(patterns.keys())
         sel_p = st.selectbox("配列選択", p_names, label_visibility="collapsed")
         target_d = patterns[sel_p]
-        view_data = [{"No.": i+1, "左": f"🌟 {get_rarity(target_d['L'][i])}" if is_target_rare(target_d['L'][i]) else target_d['L'][i] if i < len(target_d['L']) else "", 
-                      "右": f"🌟 {get_rarity(target_d['R'][i])}" if is_target_rare(target_d['R'][i]) else target_d['R'][i] if i < len(target_d['R']) else ""} 
-                     for i in range(max(len(target_d['L']), len(target_d['R'])))]
+        
+        max_len = max(len(target_d['L']), len(target_d['R']))
+        view_data = []
+        for i in range(max_len):
+            # 修正箇所：IndexErrorを防ぐための判定
+            l_val = target_d['L'][i] if i < len(target_d['L']) else None
+            r_val = target_d['R'][i] if i < len(target_d['R']) else None
+            
+            def get_list_disp(v):
+                if v is None: return ""
+                return f"🌟 {get_rarity(v)}" if is_target_rare(v) else str(v)
+                
+            view_data.append({
+                "No.": i+1, 
+                "左": get_list_disp(l_val), 
+                "右": get_list_disp(r_val)
+            })
         render_custom_table(pd.DataFrame(view_data))
 
 peek_expander = st.expander("👀配列のぞき見用")
